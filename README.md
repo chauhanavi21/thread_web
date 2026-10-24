@@ -2,7 +2,7 @@
 
 Full-stack demo e-commerce site for clothing. React (Vite) frontend, Node/Express + SQLite backend. Everything runs locally.
 
-The look follows a brutalist editorial reference: off-white paper, pure black type, huge condensed Anton headings, Archivo body text, a diamond cursor, a scroll-driven hero and a slide-in menu.
+The look follows Dribbble fashion e-commerce references: warm cream paper, near-black ink, one terracotta accent, large Instrument Serif headings with italic highlights, rounded cards and real product photos. The layout is responsive from a 360px phone to a wide desktop.
 
 ## Run it
 
@@ -33,10 +33,12 @@ The catalog (25 pieces, 369 size/colour variants) is seeded on first start. `npm
 ## Notes
 
 - **Payments are a local stand-in**: placing an order marks it `paid`. Real payment and email providers are intentionally not wired up.
-- **No photos**: each garment is drawn as an SVG in the chosen colour (`frontend/src/components/ProductImage.jsx`), so the picture always matches the swatch. To use real photos, replace that one component.
+- **Photos**: 20 of the 25 products use free Unsplash photos in `frontend/public/images/products/<slug>.jpg`. Some are close matches rather than exact: the trench is a blue coat, the cropped hoodie is a yellow set, the tote is a wicker bag and the sweater is a crochet poncho. Replace any file with the same name to change a picture.
+- **Colour swatches** pick the size/colour variant for the bag and stock, but a photo shows one fixed colour, so the product page says the photo is for illustration.
+- **Fallback drawings**: a product with no photo (shorts, baby tee, cardigan, mom jeans, scarf) shows a garment drawn as an SVG in the chosen colour (`GarmentDrawing.jsx`). Drop a `<slug>.jpg` in that folder and it switches to the photo automatically.
 - The JWT signing key is generated into `backend/data/jwt.secret` (gitignored), or set `JWT_SECRET`.
 - The database is `backend/data/threads.db` (gitignored). Delete it to start fresh.
-- Motion respects the OS "reduce motion" setting. The diamond cursor only appears for mouse and trackpad users.
+- Motion respects the OS "reduce motion" setting.
 
 ## API
 
