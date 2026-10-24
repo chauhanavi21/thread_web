@@ -7,53 +7,59 @@
     scroll-behavior: smooth;
   }
   body {
-    /* `clip`, not `hidden`: hidden would turn body into a scroll container and break position: sticky. */
-    @apply overflow-x-clip bg-brand-50 font-sans text-brand-950 antialiased;
+    @apply overflow-x-clip bg-brand-50 font-sans text-brand-900 antialiased;
   }
+  /* Large serif headings; italic words inside them pick up the accent via <em>. */
   h1, h2, h3 {
-    @apply font-display font-normal uppercase leading-[0.95] tracking-tight text-brand-950;
+    @apply font-display font-normal leading-[1.02] tracking-tight text-brand-950;
+  }
+  h1 em, h2 em, h3 em {
+    @apply italic;
   }
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-950;
+    @apply outline-2 outline-offset-2 outline-brand-900;
   }
   ::selection {
-    @apply bg-brand-950 text-brand-50;
+    @apply bg-brand-900 text-brand-50;
   }
 }
 
 @layer components {
-  /* Shared page width: wide on big screens, comfortable gutters everywhere. */
+  /* One shared page width and gutter, so every section lines up from phone to wide desktop. */
   .page {
-    @apply mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10;
+    @apply mx-auto w-full max-w-[1320px] px-4 sm:px-6 lg:px-10;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 border border-brand-950 bg-brand-950 px-6 py-3 text-xs font-bold uppercase tracking-wider text-white
-      transition hover:bg-brand-50 hover:text-brand-950 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-brand-950 disabled:hover:text-white;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-brand-900 bg-brand-900 px-6 py-3 text-sm font-medium text-white
+      transition hover:bg-accent-600 hover:border-accent-600 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-brand-900 disabled:hover:bg-brand-900;
   }
   .btn-sm {
-    @apply px-4 py-2;
+    @apply px-4 py-2 text-[13px];
   }
   .btn-outline {
-    @apply bg-transparent text-brand-950 hover:bg-brand-950 hover:text-white disabled:hover:bg-transparent disabled:hover:text-brand-950;
+    @apply bg-transparent text-brand-900 hover:border-brand-900 hover:bg-brand-900 hover:text-white disabled:hover:bg-transparent disabled:hover:text-brand-900;
   }
   .input {
-    @apply w-full border border-brand-400 bg-white px-3.5 py-2.5 text-sm text-brand-950
-      placeholder:text-brand-400 focus:border-brand-950 focus:outline-none;
+    @apply w-full rounded-xl border border-brand-300 bg-white px-3.5 py-2.5 text-sm text-brand-900
+      placeholder:text-brand-400 focus:border-brand-900 focus:outline-none;
   }
   .chip {
-    @apply shrink-0 whitespace-nowrap border border-brand-400 bg-transparent px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-brand-700 transition hover:border-brand-950 hover:text-brand-950;
+    @apply shrink-0 whitespace-nowrap rounded-full border border-brand-300 bg-transparent px-4 py-1.5 text-sm text-brand-700 transition hover:border-brand-900 hover:text-brand-900;
   }
   .chip-on {
-    @apply border-brand-950 bg-brand-950 text-white hover:text-white;
+    @apply border-brand-900 bg-brand-900 text-white hover:text-white;
   }
   .pill {
-    @apply inline-block border border-brand-950 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider;
+    @apply inline-block rounded-full bg-brand-200 px-2.5 py-0.5 text-xs font-medium capitalize text-brand-800;
   }
   .panel {
-    @apply border border-brand-300 bg-white p-5;
+    @apply rounded-2xl border border-brand-200 bg-white p-5 shadow-soft;
   }
   .link-btn {
-    @apply text-sm text-brand-500 underline-offset-2 hover:text-brand-950 hover:underline;
+    @apply text-sm text-brand-500 underline-offset-2 hover:text-brand-900 hover:underline;
+  }
+  .eyebrow {
+    @apply text-xs font-medium uppercase tracking-[0.18em] text-brand-500;
   }
   .no-scrollbar {
     scrollbar-width: none;
@@ -61,15 +67,11 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  /* Product grids draw their cell borders with a 1px gap over a grey background. */
-  .cell-grid {
-    @apply grid gap-px border border-brand-400 bg-brand-400;
-  }
 
   /* Scroll-reveal: <Reveal> adds .reveal-in once the element enters the viewport. */
   .reveal {
     opacity: 0;
-    transform: translateY(28px);
+    transform: translateY(24px);
     transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .reveal-in {
@@ -94,3 +96,4 @@
     transition-duration: 0.01ms !important;
   }
 }
+
