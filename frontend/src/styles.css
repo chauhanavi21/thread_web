@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    /* `clip`, not `hidden`: hidden would turn body into a scroll container and break position: sticky. */
+    @apply overflow-x-clip bg-brand-50 font-sans text-brand-950 antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display font-normal uppercase leading-[0.95] tracking-tight text-brand-950;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-950;
+  }
+  ::selection {
+    @apply bg-brand-950 text-brand-50;
+  }
+}
+
+@layer components {
+  /* Shared page width: wide on big screens, comfortable gutters everywhere. */
+  .page {
+    @apply mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 border border-brand-950 bg-brand-950 px-6 py-3 text-xs font-bold uppercase tracking-wider text-white
+      transition hover:bg-brand-50 hover:text-brand-950 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-brand-950 disabled:hover:text-white;
+  }
+  .btn-sm {
+    @apply px-4 py-2;
+  }
+  .btn-outline {
+    @apply bg-transparent text-brand-950 hover:bg-brand-950 hover:text-white disabled:hover:bg-transparent disabled:hover:text-brand-950;
+  }
+  .input {
+    @apply w-full border border-brand-400 bg-white px-3.5 py-2.5 text-sm text-brand-950
+      placeholder:text-brand-400 focus:border-brand-950 focus:outline-none;
+  }
+  .chip {
+    @apply shrink-0 whitespace-nowrap border border-brand-400 bg-transparent px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-brand-700 transition hover:border-brand-950 hover:text-brand-950;
+  }
+  .chip-on {
+    @apply border-brand-950 bg-brand-950 text-white hover:text-white;
+  }
+  .pill {
+    @apply inline-block border border-brand-950 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider;
+  }
+  .panel {
+    @apply border border-brand-300 bg-white p-5;
+  }
+  .link-btn {
+    @apply text-sm text-brand-500 underline-offset-2 hover:text-brand-950 hover:underline;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Product grids draw their cell borders with a 1px gap over a grey background. */
+  .cell-grid {
+    @apply grid gap-px border border-brand-400 bg-brand-400;
+  }
+
+  /* Scroll-reveal: <Reveal> adds .reveal-in once the element enters the viewport. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Honour the OS "reduce motion" setting: show everything immediately, no looping animation. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
