@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 // There are no product photos: each garment is drawn as an SVG silhouette in the chosen colour,
 // so the picture always matches the colour swatch. Swap this component for <img> when real photos exist.
 
@@ -122,22 +124,61 @@ const SHAPES = {
   ),
 };
 
-/** `type` picks the silhouette and `color` (a #rrggbb string) fills it. `name` is the accessible label. */
-/** `fit="slice"` crops the drawing to fill a non-square box instead of letterboxing it. */
-export default function ProductImage({ type, color = '#b8bbc0', name, className = '', square = true, fit = 'meet', bg = 'bg-brand-200' }) {
+/**
+ * `type` picks the silhouette and `color` (#rrggbb) fills it. The SVG filter gives it a puffy, lit look
+ * (light from the upper left), soft cloth wrinkles and a fine woven grain, so it reads as fabric, not flat vector art.
+ *  - `viewBox` crops into the drawing (the hero zooms on the chest).
+ *  - `hit` makes only the painted garment clickable, not its whole square, so overlapping garments each
+ *    keep their own click area.
+ */
+export default function ProductImage({ type, color = '#b8bbc0', name, className = '', square = true, fit = 'meet', bg = 'bg-brand-200', viewBox = '0 0 200 200', hit = false }) {
   const Shape = SHAPES[type] ?? SHAPES['t-shirts'];
-  const dark = shade(color, -0.32);
-  const light = shade(color, 0.12);
+  const id = `g${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const dark = shade(color, -0.38);
+  const light = shade(color, 0.14);
   return (
     <svg
-      viewBox="0 0 200 200"
+      viewBox={viewBox}
       preserveAspectRatio={`xMidYMid ${fit}`}
       role="img"
       aria-label={name}
       className={`${square ? 'aspect-square' : ''} w-full ${bg} ${className}`}
+      style={hit ? { pointerEvents: 'none' } : undefined}
     >
-      <ellipse cx="100" cy="186" rx="62" ry="6" fill="#1c1917" opacity=".08" />
-      <g stroke={dark} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round">
+      <defs>
+        <filter id={id} filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200" colorInterpolationFilters="sRGB">
+          {/* Rounded edges: light the blurred silhouette as if it were a height map. */}
+          <feGaussianBlur in="SourceAlpha" stdDeviation="4.2" result="blur" />
+          <feDiffuseLighting in="blur" surfaceScale="3.6" diffuseConstant="1" lightingColor="#ffffff" result="edge">
+            <feDistantLight azimuth="235" elevation="56" />
+          </feDiffuseLighting>
+          <feComposite in="SourceGraphic" in2="edge" operator="arithmetic" k1="1.3" k2="0" k3="0" k4="0" result="rounded" />
+          {/* Cloth wrinkles: a low-frequency noise height map, lit from the same side. */}
+          <feTurbulence type="fractalNoise" baseFrequency="0.011 0.032" numOctaves="3" seed="7" result="folds" />
+          <feDiffuseLighting in="folds" surfaceScale="1.7" diffuseConstant="1" lightingColor="#ffffff" result="wrinkle">
+            <feDistantLight azimuth="235" elevation="62" />
+          </feDiffuseLighting>
+          <feComposite in="rounded" in2="wrinkle" operator="arithmetic" k1="1.22" k2="0" k3="0" k4="0" result="shaded" />
+          {/* Fine weave: speckle that darkens a little, clipped to the garment. */}
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="noise" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.22" result="speck" />
+          <feComposite in="speck" in2="SourceAlpha" operator="in" result="grain" />
+          <feMerge>
+            <feMergeNode in="shaded" />
+            <feMergeNode in="grain" />
+          </feMerge>
+        </filter>
+      </defs>
+      <ellipse cx="100" cy="187" rx="64" ry="5.5" fill="#000" opacity=".14" />
+      <g
+        filter={`url(#${id})`}
+        stroke={dark}
+        strokeOpacity=".6"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        style={hit ? { pointerEvents: 'visiblePainted' } : undefined}
+      >
         {Shape(color, dark, light)}
       </g>
     </svg>
