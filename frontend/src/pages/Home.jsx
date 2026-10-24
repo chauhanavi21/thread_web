@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import DarkScene from '../components/DarkScene.jsx';
 import Hero from '../components/Hero.jsx';
 import PanelStrip from '../components/PanelStrip.jsx';
 import ProductCard from '../components/ProductCard.jsx';
@@ -14,35 +16,39 @@ const CATEGORIES = [
   { key: 'accessories', title: 'Accessories', blurb: 'Caps, beanies, scarves & totes', type: 'beanies', color: '#6b6b3a' },
 ];
 
-// Tilted cards in the black section: [type, colour, rotation in degrees, x offset in %, y offset in %]
-const STACK = [
-  ['jackets', '#6b6b3a', -9, 0, 0],
-  ['knitwear', '#ecc3c0', 6, 14, 14],
-  ['hoodies', '#6e1f2f', -4, 4, 28],
-];
+/** Perceived brightness of a #rrggbb colour, 0..255. */
+const luma = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+};
 
 export default function Home() {
   const { data, error, loading } = useAsync(() => api.products({ featured: '1' }), []);
+  // The hero zooms into one garment, so choose a mid-light one that shows the fabric (not a flat black or white blob).
+  const heroPick = useMemo(() => {
+    const tops = data?.filter((p) => ['hoodies', 'knitwear', 't-shirts', 'shirts', 'jackets'].includes(p.type));
+    return tops?.length ? [...tops].sort((a, b) => Math.abs(luma(a.colors[0].hex) - 170) - Math.abs(luma(b.colors[0].hex) - 170))[0] : data?.[0];
+  }, [data]);
 
   return (
     <>
-      <Hero product={data?.[0]} />
+      <Hero product={heroPick} />
 
-      {/* ---------- Statement ---------- */}
-      <section className="page py-24 text-center sm:py-36">
+      {/* ---------- Panel strip scene ---------- */}
+      {data && <PanelStrip products={data.slice(0, 10)} />}
+      <Status loading={loading} error={error} />
+
+      {/* ---------- Lookbook statement ---------- */}
+      <section className="page py-24 text-center sm:py-40">
         <Reveal>
-          <h2 className="mx-auto max-w-4xl text-5xl sm:text-7xl">Our pieces are made to be lived in</h2>
+          <h2 className="mx-auto max-w-4xl text-5xl sm:text-7xl">Our lookbooks serve as a dialogue</h2>
           <p className="mx-auto mt-8 max-w-md text-sm font-bold uppercase leading-relaxed">
             We prioritise clarity, function and the power of the grid to elevate everyday standards.
           </p>
+          <p className="mx-auto mt-6 max-w-lg text-xs leading-relaxed">
+            Our lookbooks serve as a dialogue between the garment and the void. By prioritising volume over traditional tailoring, each piece becomes a structural study. We invite you to explore the intersection of form and function through this curated visual sequence.
+          </p>
         </Reveal>
-      </section>
-
-      {/* ---------- 3D panel strip ---------- */}
-      <section className="overflow-hidden py-10">
-        <h2 className="page mb-4 text-xl sm:text-2xl">Threads off [ grid ]</h2>
-        {data && <PanelStrip products={data.slice(0, 10)} />}
-        <Status loading={loading} error={error} />
       </section>
 
       {/* ---------- Product grid ---------- */}
@@ -60,27 +66,8 @@ export default function Home() {
         )}
       </section>
 
-      {/* ---------- Black section ---------- */}
-      <section className="relative mt-24 overflow-hidden bg-brand-950 py-24 text-brand-50 sm:mt-40 sm:py-32">
-        <div className="page relative min-h-[34rem]">
-          <p className="text-sm leading-tight">Season<br />fall26</p>
-          <h2 className="mt-2 text-[clamp(4rem,15vw,13rem)] !text-brand-50">Intention</h2>
-          <h2 className="ml-[22%] text-[clamp(4rem,15vw,13rem)] !text-brand-200">On wear</h2>
-          <p className="mt-6 max-w-xs text-sm">Our pieces are chosen through a considered process. We are all in.</p>
-
-          <div className="pointer-events-none absolute right-[8%] top-0 hidden h-72 w-52 lg:block" aria-hidden="true">
-            {STACK.map(([type, color, rot, x, y], i) => (
-              <Reveal key={type} delay={i * 150} className="absolute w-44 border border-white/30" style={{ left: `${x}%`, top: `${y}%`, transform: `rotate(${rot}deg)` }}>
-                <ProductImage type={type} color={color} name="" bg="bg-brand-700" />
-              </Reveal>
-            ))}
-          </div>
-
-          <div className="absolute bottom-0 right-4 text-right font-display text-2xl uppercase leading-tight sm:right-10">
-            Chapter<br />0.001<br /><br />Index<br />2/2
-          </div>
-        </div>
-      </section>
+      {/* ---------- Black scene ---------- */}
+      <div className="mt-24 sm:mt-40"><DarkScene /></div>
 
       {/* ---------- Categories ---------- */}
       <section className="page mt-20 sm:mt-32">
