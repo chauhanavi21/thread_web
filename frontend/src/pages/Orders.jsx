@@ -23,18 +23,18 @@ export default function Orders() {
 
   return (
     <>
-      <h1 className="text-5xl sm:text-6xl">My orders</h1>
+      <h1 className="text-4xl sm:text-6xl">My orders</h1>
       <ul className="mt-6 space-y-3">
         {data.map((o) => (
           <li key={o.id}>
             <Link
               to={`/orders/${o.id}`}
-              className="flex flex-wrap items-center gap-x-4 gap-y-2  border border-brand-300 bg-white p-4 transition hover:border-brand-400 sm:px-6"
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-brand-200 bg-white p-4 transition hover:border-brand-400 sm:px-6"
             >
               <div className="-space-x-3 flex">
                 {o.items.slice(0, 3).map((i) => (
-                  <div key={i.variantId} className="h-12 w-12 overflow-hidden  border-2 border-white">
-                    <ProductImage type={i.type} color={i.colorHex} name="" />
+                  <div key={i.variantId} className="h-12 w-12 overflow-hidden rounded-full border-2 border-white">
+                    <ProductImage slug={i.slug} type={i.type} color={i.colorHex} name="" ratio="aspect-square" />
                   </div>
                 ))}
               </div>

@@ -48,7 +48,7 @@ export default function Checkout() {
 
   return (
     <>
-      <h1 className="text-5xl sm:text-6xl">Checkout</h1>
+      <h1 className="text-4xl sm:text-6xl">Checkout</h1>
       <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_360px]">
         <form onSubmit={submit} className="panel space-y-4 sm:p-7">
           <h2 className="text-xl">Shipping details</h2>

@@ -35,31 +35,33 @@ export default function Shop() {
   };
 
   const types = category ? meta.data?.categories[category] ?? [] : [];
-  const heading = q ? `Results for “${q}”` : category ? CATEGORY_LABELS[category] ?? 'Shop' : 'All products';
+  const heading = q ? `Results for “${q}”` : category ? CATEGORY_LABELS[category] ?? 'Shop' : 'All pieces';
 
   return (
     <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-5xl sm:text-7xl">{heading}</h1>
-          {data && <p className="mt-1 text-sm text-brand-500">{data.length} {data.length === 1 ? 'product' : 'products'}</p>}
+          <p className="eyebrow">Shop</p>
+          <h1 className="mt-2 text-5xl sm:text-7xl">{heading}</h1>
+          {data && <p className="mt-2 text-sm text-brand-500">{data.length} {data.length === 1 ? 'piece' : 'pieces'}</p>}
         </div>
         <label className="flex items-center gap-2 text-sm text-brand-600">
           Sort by
-          <select className="input w-auto py-2" value={sort} onChange={(e) => update({ sort: e.target.value })}>
+          <select className="input w-auto rounded-full py-2 pr-8" value={sort} onChange={(e) => update({ sort: e.target.value })}>
             {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
           </select>
         </label>
       </div>
 
-      <div className="no-scrollbar -mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Category">
+      {/* Filters scroll sideways on a phone instead of wrapping into a tall block. */}
+      <div className="no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Category">
         <button className={`chip ${!category ? 'chip-on' : ''}`} onClick={() => update({ category: '', type: '' })}>All</button>
         {Object.entries(CATEGORY_LABELS).map(([k, label]) => (
           <button key={k} className={`chip ${category === k ? 'chip-on' : ''}`} onClick={() => update({ category: k, type: '' })}>{label}</button>
         ))}
       </div>
       {types.length > 0 && (
-        <div className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Product type">
+        <div className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Type">
           <button className={`chip !px-3 !py-1 !text-xs ${!type ? 'chip-on' : ''}`} onClick={() => update({ type: '' })}>All types</button>
           {types.map((t) => (
             <button key={t.type} className={`chip !px-3 !py-1 !text-xs ${type === t.type ? 'chip-on' : ''}`} onClick={() => update({ type: t.type })}>
@@ -69,11 +71,11 @@ export default function Shop() {
         </div>
       )}
 
-      <div className="mt-6">
+      <div className="mt-8">
         <Status loading={loading} error={error} />
-        {data && data.length === 0 && <Status>No products match your search.</Status>}
+        {data && data.length === 0 && <Status>No pieces match your search.</Status>}
         {data && data.length > 0 && (
-          <div className="cell-grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
             {data.map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
         )}

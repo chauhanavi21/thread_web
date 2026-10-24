@@ -15,8 +15,8 @@ export function OrderSummary({ cart }) {
         <dd className="text-right">{money(cart.subtotalCents)}</dd>
         <dt className="text-brand-600">Shipping</dt>
         <dd className="text-right">{cart.shippingCents === 0 ? 'Free' : money(cart.shippingCents)}</dd>
-        <dt className="mt-1 border-t border-brand-300 pt-3 text-base font-semibold">Total</dt>
-        <dd className="mt-1 border-t border-brand-300 pt-3 text-right text-base font-semibold">{money(cart.totalCents)}</dd>
+        <dt className="mt-1 border-t border-brand-200 pt-3 text-base font-semibold">Total</dt>
+        <dd className="mt-1 border-t border-brand-200 pt-3 text-right text-base font-semibold">{money(cart.totalCents)}</dd>
       </dl>
       {cart.count > 0 && (
         <div className="mt-4">
@@ -47,19 +47,19 @@ export default function CartPage() {
 
   return (
     <>
-      <h1 className="text-5xl sm:text-6xl">Your bag</h1>
+      <h1 className="text-4xl sm:text-6xl">Your bag</h1>
       <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_360px]">
-        <ul className="divide-y divide-brand-100  border border-brand-300 bg-white">
+        <ul className="divide-y divide-brand-100 overflow-hidden rounded-2xl border border-brand-200 bg-white">
           {cart.lines.map((l) => (
             <li key={l.variantId} className="flex gap-3 p-3 sm:gap-4 sm:p-4">
               <Link to={`/product/${l.slug}`} className="w-20 shrink-0 overflow-hidden  sm:w-24">
-                <ProductImage type={l.type} color={l.colorHex} name={`${l.name} in ${l.color}`} />
+                <ProductImage slug={l.slug} type={l.type} color={l.colorHex} name={`${l.name} in ${l.color}`} ratio="aspect-[4/5]" className="rounded-xl" />
               </Link>
               <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                 <div className="min-w-0 flex-1">
                   <Link to={`/product/${l.slug}`} className="block font-semibold hover:underline">{l.name}</Link>
                   <p className="flex items-center gap-1.5 text-sm text-brand-500">
-                    <span className="h-3 w-3 border border-black/20" style={{ backgroundColor: l.colorHex }} aria-hidden="true" />
+                    <span className="h-3 w-3 rounded-full border border-black/15" style={{ backgroundColor: l.colorHex }} aria-hidden="true" />
                     {l.color}{l.size !== 'One size' && ` · ${l.size}`} · {money(l.priceCents)} each
                   </p>
                 </div>

@@ -70,15 +70,16 @@ export default function ProductPage() {
       </p>
 
       <div className="grid gap-6 md:grid-cols-2 md:gap-10">
-        <div className="overflow-hidden  md:sticky md:top-28 md:self-start">
-          <ProductImage type={p.type} color={color.hex} name={`${p.name} in ${color.name}`} />
+        <div className="md:sticky md:top-24 md:self-start">
+          <ProductImage slug={p.slug} type={p.type} color={color.hex} name={`${p.name} in ${color.name}`} ratio="aspect-[4/5]" className="rounded-3xl" priority />
+          <p className="mt-2 text-xs text-brand-500">Photo is for illustration and may not show the colour you pick.</p>
         </div>
 
         <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-brand-950">{p.type.replace(/-/g, ' ')}</p>
-          <h1 className="mt-1 text-5xl sm:text-6xl">{p.name}</h1>
+          <p className="eyebrow">{p.type.replace(/-/g, ' ')}</p>
+          <h1 className="mt-1 text-4xl sm:text-6xl">{p.name}</h1>
           <div className="mt-2"><Stars rating={p.rating} count={p.reviewCount} /></div>
-          <p className="mt-4 text-3xl font-semibold text-brand-900">{money(p.priceCents)}</p>
+          <p className="mt-4 text-3xl font-medium text-brand-900">{money(p.priceCents)}</p>
           <p className="mt-4 text-brand-600">{p.description}</p>
 
           <fieldset className="mt-6">
@@ -94,7 +95,7 @@ export default function ProductPage() {
                   aria-label={c.name}
                   aria-pressed={c.name === color.name}
                   onClick={() => chooseColor(c.name)}
-                  className={`h-9 w-9 border border-black/20 transition ${c.name === color.name ? 'outline outline-2 outline-offset-2 outline-black' : 'hover:scale-110'}`}
+                  className={`h-9 w-9 rounded-full border border-black/15 transition ${c.name === color.name ? 'outline outline-2 outline-offset-2 outline-brand-900' : 'hover:scale-110'}`}
                   style={{ backgroundColor: c.hex }}
                 />
               ))}
@@ -116,12 +117,12 @@ export default function ProductPage() {
                       disabled={out}
                       aria-pressed={s === size}
                       onClick={() => { setSize(s); setQty(1); setShowSizeHint(false); }}
-                      className={`min-w-12  border px-3 py-2 text-sm font-medium transition ${
+                      className={`min-w-12 rounded-full border px-4 py-2 text-sm font-medium transition ${
                         s === size
                           ? 'border-brand-900 bg-brand-900 text-white'
                           : out
                             ? 'cursor-not-allowed border-brand-200 bg-brand-50 text-brand-300 line-through'
-                            : 'border-brand-300 bg-white text-brand-800 hover:border-brand-900'
+                            : 'border-brand-200 bg-white text-brand-800 hover:border-brand-900'
                       }`}
                       title={out ? 'Sold out in this colour' : undefined}
                     >
@@ -156,7 +157,7 @@ export default function ProductPage() {
             </p>
           )}
 
-          <div className="mt-8 border border-brand-300 bg-brand-100 p-5">
+          <div className="mt-8 rounded-2xl bg-brand-100 p-5">
             <h2 className="text-lg">Fabric &amp; care</h2>
             <p className="mt-1 text-sm text-brand-600">{p.details}</p>
           </div>
@@ -166,7 +167,7 @@ export default function ProductPage() {
       {p.related.length > 0 && (
         <section className="mt-14">
           <h2 className="mb-5 text-4xl sm:text-5xl">You may also like</h2>
-          <div className="cell-grid grid-cols-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-4">
             {p.related.map((r) => <ProductCard key={r.id} product={r} />)}
           </div>
         </section>
