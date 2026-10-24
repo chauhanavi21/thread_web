@@ -1,7 +1,7 @@
 import { useId } from 'react';
 
-// There are no product photos: each garment is drawn as an SVG silhouette in the chosen colour,
-// so the picture always matches the colour swatch. Swap this component for <img> when real photos exist.
+// Fallback artwork: a garment drawn as an SVG silhouette in the chosen colour. ProductImage shows a photo when one
+// exists and falls back to this, so a product without a photo still has a picture that matches its colour swatch.
 
 /** Mixes a #rrggbb colour toward black (amount < 0) or white (amount > 0). */
 function shade(hex, amount) {
@@ -131,7 +131,7 @@ const SHAPES = {
  *  - `hit` makes only the painted garment clickable, not its whole square, so overlapping garments each
  *    keep their own click area.
  */
-export default function ProductImage({ type, color = '#b8bbc0', name, className = '', square = true, fit = 'meet', bg = 'bg-brand-200', viewBox = '0 0 200 200', hit = false }) {
+export default function GarmentDrawing({ type, color = '#b8bbc0', name, className = '', square = true, fit = 'meet', bg = 'bg-brand-200', viewBox = '0 0 200 200', hit = false }) {
   const Shape = SHAPES[type] ?? SHAPES['t-shirts'];
   const id = `g${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const dark = shade(color, -0.38);
@@ -148,7 +148,7 @@ export default function ProductImage({ type, color = '#b8bbc0', name, className 
       <defs>
         <filter id={id} filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200" colorInterpolationFilters="sRGB">
           {/* Rounded edges: light the blurred silhouette as if it were a height map. */}
-          <feGaussianBlur in="SourceAlpha" stdDeviation="4.2" result="blur" />
+          <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur" />
           <feDiffuseLighting in="blur" surfaceScale="3.6" diffuseConstant="1" lightingColor="#ffffff" result="edge">
             <feDistantLight azimuth="235" elevation="56" />
           </feDiffuseLighting>
@@ -161,7 +161,7 @@ export default function ProductImage({ type, color = '#b8bbc0', name, className 
           <feComposite in="rounded" in2="wrinkle" operator="arithmetic" k1="1.22" k2="0" k3="0" k4="0" result="shaded" />
           {/* Fine weave: speckle that darkens a little, clipped to the garment. */}
           <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.22" result="speck" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.3" result="speck" />
           <feComposite in="speck" in2="SourceAlpha" operator="in" result="grain" />
           <feMerge>
             <feMergeNode in="shaded" />
