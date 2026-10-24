@@ -1,31 +1,35 @@
 import { Link } from 'react-router-dom';
-import ProductImage from './ProductImage.jsx';
 
-const LINK = 'block font-bold uppercase transition hover:underline';
+const LINK = 'block py-1 text-brand-600 transition hover:text-brand-950';
 
 export default function Footer() {
   return (
-    <footer className="mt-24 border-t border-brand-400 bg-brand-50">
-      <div className="page grid gap-10 py-12 md:grid-cols-2">
-        <div className="flex flex-col justify-between gap-10">
-          <div className="flex justify-between text-sm">
-            <span>Collection archive</span>
-            <span>Edition 026</span>
-          </div>
-          <nav className="self-end text-right text-sm" aria-label="Footer">
-            <Link className={LINK} to="/shop?category=women">Women</Link>
-            <Link className={LINK} to="/shop?category=men">Men</Link>
-            <Link className={LINK} to="/shop?category=accessories">Accessories</Link>
-            <Link className={LINK} to="/orders">My orders</Link>
-          </nav>
-          <div className="flex items-end justify-between gap-6">
-            <div className="hidden w-40 sm:block"><ProductImage type="jackets" color="#3b3f45" name="" bg="bg-brand-200" /></div>
-            <p className="text-sm">© 2026 Threads. Demo store: no real payments are taken.</p>
-          </div>
+    <footer className="mt-24 bg-brand-900 text-brand-200">
+      <div className="page grid gap-12 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+        <div>
+          <p className="font-display text-4xl text-brand-50">Threads<span className="text-accent-400">.</span></p>
+          <p className="mt-3 max-w-xs text-sm text-brand-300">Everyday clothing in honest fabrics, made to be worn on repeat.</p>
         </div>
-        <div className="hidden md:block">
-          <ProductImage type="hoodies" color="#6b6b3a" name="" bg="bg-brand-200" />
+        <nav aria-label="Shop" className="text-sm">
+          <p className="eyebrow mb-2 text-brand-400">Shop</p>
+          <Link className={`${LINK} !text-brand-200 hover:!text-white`} to="/shop?category=women">Women</Link>
+          <Link className={`${LINK} !text-brand-200 hover:!text-white`} to="/shop?category=men">Men</Link>
+          <Link className={`${LINK} !text-brand-200 hover:!text-white`} to="/shop?category=accessories">Accessories</Link>
+        </nav>
+        <nav aria-label="Account" className="text-sm">
+          <p className="eyebrow mb-2 text-brand-400">Account</p>
+          <Link className={`${LINK} !text-brand-200 hover:!text-white`} to="/orders">My orders</Link>
+          <Link className={`${LINK} !text-brand-200 hover:!text-white`} to="/cart">Bag</Link>
+          <Link className={`${LINK} !text-brand-200 hover:!text-white`} to="/login">Sign in</Link>
+        </nav>
+        <div className="text-sm">
+          <p className="eyebrow mb-2 text-brand-400">Help</p>
+          <p className="py-1">Free shipping over $100</p>
+          <p className="py-1">30-day returns</p>
         </div>
+      </div>
+      <div className="border-t border-white/10">
+        <p className="page py-5 text-xs text-brand-400">© 2026 Threads. Demo store, so no real payments are taken. Photos from Unsplash.</p>
       </div>
     </footer>
   );

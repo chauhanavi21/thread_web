@@ -2,7 +2,6 @@ import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router
 import { useEffect } from 'react';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
-import Cursor from './components/Cursor.jsx';
 import { Status } from './components/Status.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import Home from './pages/Home.jsx';
@@ -24,7 +23,7 @@ function RequireAuth({ children }) {
 
 function Page() {
   return (
-    <div className="page pb-10 pt-24 sm:pb-16">
+    <div className="page py-8 sm:py-12">
       <Outlet />
     </div>
   );
@@ -42,7 +41,6 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
-      <Cursor />
       <Header />
       <main className="min-h-[70vh]">
         <Routes>
