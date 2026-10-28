@@ -43,6 +43,8 @@ function toProduct(row, variants) {
     rating: row.rating,
     reviewCount: row.review_count,
     featured: Boolean(row.featured),
+    active: Boolean(row.active),
+    image: row.image,
     colors,
     sizes,
     variants,
@@ -50,17 +52,17 @@ function toProduct(row, variants) {
   };
 }
 
-function toProducts(rows) {
+export function toProducts(rows) {
   const variants = variantsByProduct(rows.map((r) => r.id));
   return rows.map((r) => toProduct(r, variants.get(r.id) ?? []));
 }
 
-// GET /api/products?category=women&type=dresses&q=linen&sort=price-asc&featured=1
-router.get('/', (req, res) => {
-  const { category, type, q, sort = 'featured', featured } = req.query;
+/** Shared by the shop and the admin list. The shop only ever sees active products. */
+export function listProducts({ category, type, q, sort = 'featured', featured, includeInactive = false } = {}) {
   const where = [];
   const params = [];
 
+  if (!includeInactive) where.push('p.active = 1');
   if (typeof category === 'string' && category) {
     where.push('p.category = ?');
     params.push(category);
@@ -78,22 +80,25 @@ router.get('/', (req, res) => {
 
   const orderBy = SORTS[sort] || SORTS.featured;
   const sql = `SELECT p.* FROM products p ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY ${orderBy}`;
-  res.json(toProducts(db.prepare(sql).all(...params)));
-});
+  return toProducts(db.prepare(sql).all(...params));
+}
+
+// GET /api/products?category=women&type=dresses&q=linen&sort=price-asc&featured=1
+router.get('/', (req, res) => res.json(listProducts(req.query)));
 
 // GET /api/products/meta -> categories and their product types, for building filters
 router.get('/meta', (_req, res) => {
-  const rows = db.prepare('SELECT category, type, COUNT(*) AS n FROM products GROUP BY category, type ORDER BY category, type').all();
+  const rows = db.prepare('SELECT category, type, COUNT(*) AS n FROM products WHERE active = 1 GROUP BY category, type ORDER BY category, type').all();
   const categories = {};
   for (const r of rows) (categories[r.category] ||= []).push({ type: r.type, count: r.n });
   res.json({ categories });
 });
 
 router.get('/:slug', (req, res) => {
-  const row = db.prepare('SELECT * FROM products WHERE slug = ?').get(req.params.slug);
+  const row = db.prepare('SELECT * FROM products WHERE slug = ? AND active = 1').get(req.params.slug);
   if (!row) throw new HttpError(404, 'Product not found.');
   const related = db
-    .prepare('SELECT * FROM products WHERE category = ? AND id != ? ORDER BY (type = ?) DESC, rating DESC LIMIT 4')
+    .prepare('SELECT * FROM products WHERE active = 1 AND category = ? AND id != ? ORDER BY (type = ?) DESC, rating DESC LIMIT 4')
     .all(row.category, row.id, row.type);
   const [product] = toProducts([row]);
   res.json({ ...product, related: toProducts(related) });

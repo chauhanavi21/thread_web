@@ -2,18 +2,15 @@ import { Router } from 'express';
 import { db, transaction } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, str } from '../http.js';
+import { getSettings } from '../settings.js';
 
 const router = Router();
 router.use(requireAuth);
 
-const FREE_SHIPPING_OVER_CENTS = 10000;
-const FLAT_SHIPPING_CENTS = 699;
-const MAX_QTY_PER_ITEM = 10;
-
 function loadOrder(orderId) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   const items = db
-    .prepare('SELECT oi.*, p.slug, p.type FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? ORDER BY oi.id')
+    .prepare('SELECT oi.*, p.slug, p.type, p.image FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? ORDER BY oi.id')
     .all(orderId);
   return {
     id: order.id,
@@ -28,6 +25,7 @@ function loadOrder(orderId) {
       variantId: i.variant_id,
       slug: i.slug,
       type: i.type,
+      image: i.image,
       name: i.name,
       color: i.color,
       colorHex: i.color_hex,
@@ -54,6 +52,7 @@ router.get('/:id', (req, res) => {
 // Payment is a local stand-in: any order that passes validation is marked "paid".
 router.post('/', (req, res) => {
   const body = req.body ?? {};
+  const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY_PER_ITEM } = getSettings();
   const shipping = {
     name: str(body.shipping?.name, { field: 'Full name', max: 100 }),
     address: str(body.shipping?.address, { field: 'Address', max: 200 }),
@@ -77,12 +76,12 @@ router.post('/', (req, res) => {
 
   const orderId = transaction(() => {
     const getVariant = db.prepare(
-      'SELECT v.*, p.name AS product_name, p.price_cents FROM variants v JOIN products p ON p.id = v.product_id WHERE v.id = ?',
+      'SELECT v.*, p.name AS product_name, p.price_cents, p.active FROM variants v JOIN products p ON p.id = v.product_id WHERE v.id = ?',
     );
     const lines = [];
     for (const [variantId, qty] of wanted) {
       const v = getVariant.get(variantId);
-      if (!v) throw new HttpError(400, 'One of the items in your bag is no longer available.');
+      if (!v || !v.active) throw new HttpError(400, 'One of the items in your bag is no longer available.');
       const label = `${v.product_name} (${v.color}, ${v.size})`;
       if (qty > MAX_QTY_PER_ITEM) throw new HttpError(400, `You can order at most ${MAX_QTY_PER_ITEM} of "${label}".`);
       if (v.stock < qty) {
@@ -92,7 +91,7 @@ router.post('/', (req, res) => {
     }
 
     const subtotal = lines.reduce((sum, { v, qty }) => sum + v.price_cents * qty, 0);
-    const shippingCents = subtotal >= FREE_SHIPPING_OVER_CENTS ? 0 : FLAT_SHIPPING_CENTS;
+    const shippingCents = subtotal >= freeShippingOverCents ? 0 : flatShippingCents;
 
     const { lastInsertRowid } = db
       .prepare(
