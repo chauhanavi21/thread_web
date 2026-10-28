@@ -4,6 +4,11 @@ import { getSettings } from '../settings.js';
 
 const router = Router();
 
+const featuredProduct = (slug) =>
+  slug
+    ? db.prepare('SELECT slug, name, type, price_cents AS priceCents, image FROM products WHERE slug = ? AND active = 1').get(slug) ?? null
+    : null;
+
 // GET /api/site -> everything the storefront needs that the admin controls: categories and site settings.
 router.get('/', (_req, res) => {
   const categories = db
@@ -13,7 +18,13 @@ router.get('/', (_req, res) => {
        ORDER BY c.sort_order, c.title`,
     )
     .all();
-  res.json({ categories, settings: getSettings() });
+  const settings = getSettings();
+  res.json({
+    categories,
+    settings,
+    heroProduct: featuredProduct(settings.heroProduct),
+    bannerProduct: featuredProduct(settings.bannerProduct),
+  });
 });
 
 export default router;
