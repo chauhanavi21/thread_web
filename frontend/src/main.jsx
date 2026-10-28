@@ -7,15 +7,18 @@ import '@fontsource/instrument-serif/400-italic.css';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { CartProvider } from './context/CartContext.jsx';
+import { SiteProvider } from './context/SiteContext.jsx';
 import './styles.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <CartProvider>
-          <App />
-        </CartProvider>
+        <SiteProvider>
+          <CartProvider>
+            <App />
+          </CartProvider>
+        </SiteProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

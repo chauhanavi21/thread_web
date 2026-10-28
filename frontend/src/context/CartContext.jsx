@@ -1,10 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useSite } from './SiteContext.jsx';
 
 const CartContext = createContext(null);
 const CART_KEY = 'threads.cart';
-export const MAX_QTY = 10;
-export const FREE_SHIPPING_OVER_CENTS = 10000;
-export const FLAT_SHIPPING_CENTS = 699;
 
 function loadCart() {
   try {
@@ -20,6 +18,7 @@ const snapshot = (product, variant) => ({
   productId: product.id,
   variantId: variant.id,
   slug: product.slug,
+  image: product.image ?? null,
   name: product.name,
   type: product.type,
   color: variant.color,
@@ -30,6 +29,9 @@ const snapshot = (product, variant) => ({
 });
 
 export function CartProvider({ children }) {
+  // Shipping and quantity rules are set by the admin. The server applies the same rules when the order is placed.
+  const { settings } = useSite();
+  const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY } = settings;
   const [lines, setLines] = useState(loadCart);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export function CartProvider({ children }) {
       }
       return [...prev, { ...snapshot(product, variant), qty: Math.min(limit, qty) }];
     });
-  }, []);
+  }, [MAX_QTY]);
 
   const setQty = useCallback((variantId, qty) => {
     setLines((prev) =>
@@ -59,7 +61,7 @@ export function CartProvider({ children }) {
         return [{ ...l, qty: Math.min(qty, MAX_QTY, l.stock) }];
       }),
     );
-  }, []);
+  }, [MAX_QTY]);
 
   const remove = useCallback((variantId) => setLines((prev) => prev.filter((l) => l.variantId !== variantId)), []);
   const clear = useCallback(() => setLines([]), []);
@@ -67,9 +69,9 @@ export function CartProvider({ children }) {
   const value = useMemo(() => {
     const count = lines.reduce((n, l) => n + l.qty, 0);
     const subtotalCents = lines.reduce((n, l) => n + l.qty * l.priceCents, 0);
-    const shippingCents = lines.length === 0 || subtotalCents >= FREE_SHIPPING_OVER_CENTS ? 0 : FLAT_SHIPPING_CENTS;
-    return { lines, count, subtotalCents, shippingCents, totalCents: subtotalCents + shippingCents, add, setQty, remove, clear };
-  }, [lines, add, setQty, remove, clear]);
+    const shippingCents = lines.length === 0 || subtotalCents >= freeShippingOverCents ? 0 : flatShippingCents;
+    return { lines, count, subtotalCents, shippingCents, totalCents: subtotalCents + shippingCents, freeShippingOverCents, maxQty: MAX_QTY, add, setQty, remove, clear };
+  }, [lines, add, setQty, remove, clear, freeShippingOverCents, flatShippingCents, MAX_QTY]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
