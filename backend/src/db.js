@@ -47,6 +47,20 @@ db.exec(`
     UNIQUE (product_id, color, size)
   );
 
+  -- Shop sections, managed from the admin. "key" is the URL value used by products.category.
+  CREATE TABLE IF NOT EXISTS categories (
+    key        TEXT PRIMARY KEY,
+    title      TEXT NOT NULL,
+    blurb      TEXT NOT NULL DEFAULT '',
+    image      TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS orders (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id        INTEGER NOT NULL REFERENCES users (id),
@@ -77,6 +91,15 @@ db.exec(`
     qty         INTEGER NOT NULL CHECK (qty > 0)
   );
 `);
+
+// Columns added after the first release. Existing databases are upgraded in place.
+function addColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+addColumn('users', 'role', "TEXT NOT NULL DEFAULT 'customer'"); // customer | admin
+addColumn('products', 'active', 'INTEGER NOT NULL DEFAULT 1'); // 0 = hidden from the shop
+addColumn('products', 'image', 'TEXT'); // URL of the product photo, or null for the drawn fallback
 
 /** Runs fn inside a write transaction; rolls back if it throws. */
 export function transaction(fn) {
