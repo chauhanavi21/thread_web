@@ -12,12 +12,23 @@ import Checkout from './pages/Checkout.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import Orders from './pages/Orders.jsx';
 import OrderDetail from './pages/OrderDetail.jsx';
+import AdminLayout from './admin/AdminLayout.jsx';
+import Dashboard from './admin/Dashboard.jsx';
+import AdminProducts from './admin/Products.jsx';
+import ProductEditor from './admin/ProductEditor.jsx';
+import AdminOrders from './admin/Orders.jsx';
+import Customers from './admin/Customers.jsx';
+import Categories from './admin/Categories.jsx';
+import SiteSettings from './admin/SiteSettings.jsx';
 
 function RequireAuth({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, signedOutOnPurpose } = useAuth();
   const location = useLocation();
   if (loading) return <Status loading />;
-  if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  if (!user) {
+    // Someone who just clicked "Sign out" goes home; someone who opened a private link is sent back to it after signing in.
+    return signedOutOnPurpose.current ? <Navigate to="/" replace /> : <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
   return children;
 }
 
@@ -53,6 +64,15 @@ export default function App() {
             <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
             <Route path="/orders" element={<RequireAuth><Orders /></RequireAuth>} />
             <Route path="/orders/:id" element={<RequireAuth><OrderDetail /></RequireAuth>} />
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="products/:id" element={<ProductEditor />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="categories" element={<Categories />} />
+              <Route path="settings" element={<SiteSettings />} />
+            </Route>
             <Route path="/login" element={<AuthPage mode="login" />} />
             <Route path="/register" element={<AuthPage mode="register" />} />
             <Route

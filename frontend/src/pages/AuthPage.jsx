@@ -13,10 +13,11 @@ function Field({ label, ...props }) {
 
 export default function AuthPage({ mode }) {
   const isRegister = mode === 'register';
-  const { user, login, register } = useAuth();
+  const { user, isAdmin, login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = location.state?.from || '/';
+  // Admins land on the dashboard unless they were sent here from a specific page.
+  const redirectTo = location.state?.from || (isAdmin ? '/admin' : '/');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,7 +33,7 @@ export default function AuthPage({ mode }) {
     try {
       if (isRegister) await register(form);
       else await login(form.email, form.password);
-      navigate(redirectTo, { replace: true });
+      // Signing in sets the user, which re-renders this page and redirects through the <Navigate> above.
     } catch (err) {
       setError(err.message);
       setBusy(false);
