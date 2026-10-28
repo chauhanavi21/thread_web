@@ -54,6 +54,17 @@ The design follows Dribbble fashion e-commerce references: warm cream paper, nea
 - Create an account or sign in, check out with a shipping address, and see the order afterwards with a confirmation banner.
 - "My orders" lists past orders with their items, totals and shipping address.
 
+**Run the shop (admin)**
+
+Everything on the storefront is controlled from `/admin`, which only accounts with the **admin** role can open:
+
+- **Dashboard:** revenue, orders to fulfil, low-stock variants, recent orders and best sellers.
+- **Products:** add, edit, hide or delete products; set price, rating, featured flag, photo (upload a JPEG, PNG or WebP) and a stock number for every colour and size. Hidden products disappear from the shop but keep their order history.
+- **Orders:** every customer's order, with a status you can change (paid, processing, shipped, delivered, cancelled). Cancelling puts the items back in stock, and reopening takes them out again.
+- **Customers:** see who has signed up and what they have spent, promote someone to admin or demote them.
+- **Categories:** rename, reorder, describe and add pictures for the shop sections. They drive the menu, the footer, the shop filters and the home page tiles.
+- **Site settings:** the announcement bar, home page hero and banner copy, the highlights strip, the footer note, free-shipping threshold, flat shipping rate and the per-item quantity limit. The server uses the same shipping and quantity rules when it takes an order.
+
 ## Run it
 
 You need **Node 22.13 or newer**, because the database is Node's built-in `node:sqlite`. Nothing else has to be installed.
@@ -129,6 +140,18 @@ frontend/
 docs/screenshots/           The images in this README
 ```
 
+### Signing in as admin
+
+The first time the API starts with no admin account it creates `admin@threads.local` with a random password and prints it once in the terminal. To choose your own, set these before starting the API (it creates the account, or promotes it if the email is already registered):
+
+```powershell
+$env:ADMIN_EMAIL = "you@example.com"
+$env:ADMIN_PASSWORD = "a-long-password"
+npm run dev
+```
+
+Signing in as an admin takes you to `/admin`. More admins can be made from the Customers page.
+
 ## API
 
 | Method | Path | Notes |
@@ -144,14 +167,37 @@ docs/screenshots/           The images in this README
 | GET | `/api/orders/:id` | One of your orders (anyone else's gives 404) |
 | POST | `/api/orders` | `{ items: [{ variantId, qty }], shipping: { name, address, city, zip } }`. Returns the new order, or 409 if stock ran out |
 
+**Storefront settings**
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/site` | Categories, site settings and the hero and banner products. Public |
+
+**Admin** (every route needs an admin token; a customer gets 403, no token gets 401). The role is read from the database on each request, so demoting an admin takes effect at once.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/admin/stats` | Dashboard numbers |
+| GET, POST | `/api/admin/products` | List all (including hidden), create with variants |
+| GET, PUT, PATCH, DELETE | `/api/admin/products/:id` | PUT replaces fields and variants; PATCH toggles `active` / `featured`; DELETE is refused (409) if past orders use the product |
+| GET | `/api/admin/orders?status=` | All orders with customer and items |
+| PATCH | `/api/admin/orders/:id` | `{ status }`; cancelling restocks |
+| GET | `/api/admin/users` | Customers with order counts and spend |
+| PATCH, DELETE | `/api/admin/users/:id` | `{ role }`; you cannot demote yourself or the last admin |
+| GET, POST, PUT, DELETE | `/api/admin/categories[/:key]` | A category with products cannot be deleted |
+| GET, PUT | `/api/admin/settings` | Unknown keys are rejected |
+| POST | `/api/admin/uploads` | Raw image bytes with an `image/jpeg`, `image/png` or `image/webp` content type, up to 5 MB. The file header is checked. Returns `{ url }` |
+
+Uploaded photos are stored in `backend/data/uploads/` and served from `/api/uploads/`.
+
 Errors come back as `{ "error": "message" }` with a matching status code.
 
 ## The catalog and photos
 
-25 products: 11 for women, 10 for men and 4 accessories, from t-shirts and hoodies to jeans, dresses, knitwear, jackets, caps and bags.
+75 products: 30 for women, 26 for men and 19 accessories, from t-shirts and hoodies to jeans, dresses, knitwear, jackets, caps, bags and scarves. The first 25 are the launch range (`backend/src/seedData.js`) and the other 50 were added as a second batch (`backend/src/seedBatch2.js`). Each batch is applied once per database and recorded, so a product you delete in the admin does not come back when the API restarts.
 
-- **Photos.** 20 products have a photo in `frontend/public/images/products/<slug>.jpg`, from [Unsplash](https://unsplash.com) (free to use under the Unsplash licence). Some are close matches rather than exact: the trench coat is a blue coat, the cropped hoodie is a yellow set, the tote is a wicker bag and the sweater is a crochet poncho. Replace any file with the same name to change a picture.
-- **Fallback drawings.** A product with no photo shows a garment drawn as an SVG in the chosen colour (`GarmentDrawing.jsx`), lit and textured so it reads as cloth. Five products use it today: the chino shorts, baby tee, ribbed cardigan, mom jeans and wool scarf. Put `<slug>.jpg` in the images folder and the photo replaces the drawing automatically.
+- **Photos.** 20 of the launch products have a photo in `frontend/public/images/products/<slug>.jpg`, from [Unsplash](https://unsplash.com) (free to use under the Unsplash licence). Some are close matches rather than exact: the trench coat is a blue coat, the cropped hoodie is a yellow set, the tote is a wicker bag and the sweater is a crochet poncho. Each product stores the URL of its photo, so the simplest way to change one is to upload a new one in the product editor. The 50 newer products have no photo yet and show the drawn garment until you add one.
+- **Fallback drawings.** A product with no photo shows a garment drawn as an SVG in the chosen colour (`GarmentDrawing.jsx`), lit and textured so it reads as cloth. Any product without a photo uses it, which today is the 50 new products and five of the launch ones. Upload a photo in the admin and it replaces the drawing.
 - **Colour swatches and photos.** A photo shows one fixed colour, so choosing a different swatch does not recolour it. The swatch still chooses the right colour and size for your bag, and the product page says the photo is for illustration.
 
 ## Design notes
@@ -165,6 +211,7 @@ Errors come back as `{ "error": "message" }` with a matching status code.
 
 - **Payments are a stand-in.** Placing an order marks it `paid` immediately. No card is taken and there is no payment provider.
 - **No email.** The "stay in the loop" box on the home page stores nothing, and there are no order emails.
-- **No admin area.** Stock and prices change by editing `backend/src/seed.js` and reseeding.
-- **Shipping is one flat rule:** free over $100, otherwise $6.99.
+- **Shipping is one flat rule:** a free-over amount and a flat rate, both editable in the admin. There are no zones or carriers.
+- **Admin has no audit log or per-staff permissions.** Every admin can do everything.
+- **Uploads live on the API's disk** in `backend/data/uploads/`, so back that folder up with the database.
 - **One database file on one machine.** It is fine for a demo, not for running a real shop.
