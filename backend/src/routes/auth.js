@@ -1,30 +1,10 @@
-import crypto from 'node:crypto';
-import { promisify } from 'node:util';
 import { Router } from 'express';
 import { db } from '../db.js';
-import { requireAuth, signToken } from '../auth.js';
+import { hashPassword, publicUser, requireAuth, signToken, verifyPassword } from '../auth.js';
 import { HttpError, rateLimit, str } from '../http.js';
 
-const scrypt = promisify(crypto.scrypt);
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
-
-async function hashPassword(password) {
-  const salt = crypto.randomBytes(16);
-  const key = await scrypt(password, salt, 64);
-  return `${salt.toString('hex')}:${key.toString('hex')}`;
-}
-
-async function verifyPassword(password, stored) {
-  const [saltHex, keyHex] = stored.split(':');
-  const expected = Buffer.from(keyHex, 'hex');
-  const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length);
-  return crypto.timingSafeEqual(actual, expected);
-}
-
-function publicUser(row) {
-  return { id: row.id, name: row.name, email: row.email };
-}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
