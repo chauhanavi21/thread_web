@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, money } from '../api.js';
-import { MAX_QTY, useCart } from '../context/CartContext.jsx';
+import { useCart } from '../context/CartContext.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 import Stars from '../components/Stars.jsx';
@@ -12,6 +12,7 @@ export default function ProductPage() {
   const { slug } = useParams();
   const { data: p, error, loading } = useAsync(() => api.product(slug), [slug]);
   const { add, lines } = useCart();
+  const { maxQty: MAX_QTY } = useCart();
   const [colorName, setColorName] = useState('');
   const [size, setSize] = useState('');
   const [qty, setQty] = useState(1);
@@ -71,7 +72,7 @@ export default function ProductPage() {
 
       <div className="grid gap-6 md:grid-cols-2 md:gap-10">
         <div className="md:sticky md:top-24 md:self-start">
-          <ProductImage slug={p.slug} type={p.type} color={color.hex} name={`${p.name} in ${color.name}`} ratio="aspect-[4/5]" className="rounded-3xl" priority />
+          <ProductImage image={p.image} type={p.type} color={color.hex} name={`${p.name} in ${color.name}`} ratio="aspect-[4/5]" className="rounded-3xl" priority />
           <p className="mt-2 text-xs text-brand-500">Photo is for illustration and may not show the colour you pick.</p>
         </div>
 

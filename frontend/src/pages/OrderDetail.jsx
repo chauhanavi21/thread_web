@@ -31,7 +31,7 @@ export default function OrderDetail() {
           {o.items.map((i) => (
             <li key={i.variantId} className="flex items-center gap-4 p-3 sm:p-4">
               <div className="w-16 shrink-0 overflow-hidden  sm:w-20">
-                <ProductImage slug={i.slug} type={i.type} color={i.colorHex} name={`${i.name} in ${i.color}`} ratio="aspect-[4/5]" className="rounded-xl" />
+                <ProductImage image={i.image} type={i.type} color={i.colorHex} name={`${i.name} in ${i.color}`} ratio="aspect-[4/5]" className="rounded-xl" />
               </div>
               <div className="min-w-0 flex-1">
                 <Link to={`/product/${i.slug}`} className="font-semibold hover:underline">{i.name}</Link>

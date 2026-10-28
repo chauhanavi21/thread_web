@@ -15,7 +15,7 @@ export default function ProductCard({ product, className = '' }) {
     <article className={`group flex h-full flex-col ${className}`}>
       <Link to={to} className="relative block overflow-hidden rounded-2xl" aria-label={product.name}>
         <ProductImage
-          slug={product.slug}
+          image={product.image}
           type={product.type}
           color={color.hex}
           name={`${product.name} in ${color.name}`}

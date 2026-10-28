@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom';
 import { money } from '../api.js';
-import { FREE_SHIPPING_OVER_CENTS, MAX_QTY, useCart } from '../context/CartContext.jsx';
+import { useCart } from '../context/CartContext.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 import { Status } from '../components/Status.jsx';
 
 export function OrderSummary({ cart }) {
-  const toFree = FREE_SHIPPING_OVER_CENTS - cart.subtotalCents;
-  const progress = Math.min(100, (cart.subtotalCents / FREE_SHIPPING_OVER_CENTS) * 100);
+  const toFree = cart.freeShippingOverCents - cart.subtotalCents;
+  const progress = Math.min(100, (cart.subtotalCents / cart.freeShippingOverCents) * 100);
   return (
     <aside className="panel">
       <h2 className="text-lg">Order summary</h2>
@@ -53,7 +53,7 @@ export default function CartPage() {
           {cart.lines.map((l) => (
             <li key={l.variantId} className="flex gap-3 p-3 sm:gap-4 sm:p-4">
               <Link to={`/product/${l.slug}`} className="w-20 shrink-0 overflow-hidden  sm:w-24">
-                <ProductImage slug={l.slug} type={l.type} color={l.colorHex} name={`${l.name} in ${l.color}`} ratio="aspect-[4/5]" className="rounded-xl" />
+                <ProductImage image={l.image} type={l.type} color={l.colorHex} name={`${l.name} in ${l.color}`} ratio="aspect-[4/5]" className="rounded-xl" />
               </Link>
               <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                 <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ export default function CartPage() {
                   <label>
                     <span className="sr-only">Quantity for {l.name}</span>
                     <select className="input w-20 py-2" value={l.qty} onChange={(e) => cart.setQty(l.variantId, Number(e.target.value))}>
-                      {Array.from({ length: Math.min(MAX_QTY, l.stock) }, (_, i) => <option key={i + 1}>{i + 1}</option>)}
+                      {Array.from({ length: Math.min(cart.maxQty, l.stock) }, (_, i) => <option key={i + 1}>{i + 1}</option>)}
                     </select>
                   </label>
                   <strong className="w-20 text-right">{money(l.priceCents * l.qty)}</strong>

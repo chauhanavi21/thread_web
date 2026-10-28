@@ -34,7 +34,7 @@ export default function Orders() {
               <div className="-space-x-3 flex">
                 {o.items.slice(0, 3).map((i) => (
                   <div key={i.variantId} className="h-12 w-12 overflow-hidden rounded-full border-2 border-white">
-                    <ProductImage slug={i.slug} type={i.type} color={i.colorHex} name="" ratio="aspect-square" />
+                    <ProductImage image={i.image} type={i.type} color={i.colorHex} name="" ratio="aspect-square" />
                   </div>
                 ))}
               </div>
