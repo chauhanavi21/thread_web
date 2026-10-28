@@ -2,13 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
-
-const NAV = [
-  ['/shop?category=women', 'Women'],
-  ['/shop?category=men', 'Men'],
-  ['/shop?category=accessories', 'Accessories'],
-  ['/shop', 'All pieces'],
-];
+import { useSite } from '../context/SiteContext.jsx';
 
 const navClass = ({ isActive }) => `text-sm transition hover:text-accent-600 ${isActive ? 'text-brand-950' : 'text-brand-600'}`;
 
@@ -25,7 +19,9 @@ function Icon({ children }) {
  * full-width drop-down panel behind the menu button, so nothing is squeezed on a phone.
  */
 export default function Header() {
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
+  const { categories, settings } = useSite();
+  const NAV = [...categories.map((c) => [`/shop?category=${c.key}`, c.title]), ['/shop', 'All pieces']];
   const { count } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,6 +58,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-brand-200 bg-brand-50/90 backdrop-blur">
+      {settings.announcement && <p className="bg-brand-900 px-4 py-1.5 text-center text-xs text-brand-50" role="status">{settings.announcement}</p>}
       <div className="page flex items-center gap-4 py-3 md:gap-8">
         <button
           type="button"
@@ -87,6 +84,7 @@ export default function Header() {
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {user ? (
             <>
+              {isAdmin && <Link to="/admin" className="hidden rounded-full bg-accent-100 px-3 py-2 text-sm font-medium text-accent-700 hover:bg-accent-200 sm:block">Admin</Link>}
               <Link to="/orders" className="hidden rounded-full px-3 py-2 text-sm text-brand-700 hover:bg-brand-100 sm:block">Hi, {user.name.split(' ')[0]}</Link>
               <button type="button" className="hidden rounded-full px-3 py-2 text-sm text-brand-500 hover:bg-brand-100 sm:block" onClick={() => { logout(); navigate('/'); }}>Sign out</button>
             </>
@@ -113,6 +111,7 @@ export default function Header() {
               <Link key={label} to={to} className="border-b border-brand-200 py-3 font-display text-2xl text-brand-900">{label}</Link>
             ))}
             {user && <Link to="/orders" className="border-b border-brand-200 py-3 font-display text-2xl text-brand-900">My orders</Link>}
+            {isAdmin && <Link to="/admin" className="border-b border-brand-200 py-3 font-display text-2xl text-accent-700">Admin</Link>}
           </nav>
           {user && <button type="button" className="link-btn" onClick={() => { logout(); navigate('/'); }}>Sign out</button>}
         </div>

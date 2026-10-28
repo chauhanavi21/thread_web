@@ -3,8 +3,8 @@ import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
+import { useSite } from '../context/SiteContext.jsx';
 
-const CATEGORY_LABELS = { women: 'Women', men: 'Men', accessories: 'Accessories' };
 const SORTS = [
   ['featured', 'Featured'],
   ['rating', 'Top rated'],
@@ -17,6 +17,8 @@ const titleCase = (s) => s.replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCas
 
 export default function Shop() {
   const [params, setParams] = useSearchParams();
+  const { categories } = useSite();
+  const labels = Object.fromEntries(categories.map((c) => [c.key, c.title]));
   const category = params.get('category') || '';
   const type = params.get('type') || '';
   const q = params.get('q') || '';
@@ -35,7 +37,7 @@ export default function Shop() {
   };
 
   const types = category ? meta.data?.categories[category] ?? [] : [];
-  const heading = q ? `Results for “${q}”` : category ? CATEGORY_LABELS[category] ?? 'Shop' : 'All pieces';
+  const heading = q ? `Results for “${q}”` : category ? labels[category] ?? titleCase(category) : 'All pieces';
 
   return (
     <>
@@ -56,8 +58,8 @@ export default function Shop() {
       {/* Filters scroll sideways on a phone instead of wrapping into a tall block. */}
       <div className="no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Category">
         <button className={`chip ${!category ? 'chip-on' : ''}`} onClick={() => update({ category: '', type: '' })}>All</button>
-        {Object.entries(CATEGORY_LABELS).map(([k, label]) => (
-          <button key={k} className={`chip ${category === k ? 'chip-on' : ''}`} onClick={() => update({ category: k, type: '' })}>{label}</button>
+        {categories.map((c) => (
+          <button key={c.key} className={`chip ${category === c.key ? 'chip-on' : ''}`} onClick={() => update({ category: c.key, type: '' })}>{c.title}</button>
         ))}
       </div>
       {types.length > 0 && (
