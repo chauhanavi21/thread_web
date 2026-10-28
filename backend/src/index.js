@@ -1,15 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import { seedIfEmpty } from './seed.js';
+import { ensureAdmin } from './bootstrapAdmin.js';
 import { HttpError } from './http.js';
 import productsRouter from './routes/products.js';
 import authRouter from './routes/auth.js';
 import ordersRouter from './routes/orders.js';
+import siteRouter from './routes/site.js';
+import adminRouter, { UPLOAD_DIR } from './routes/admin.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 const ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
-if (seedIfEmpty()) console.log('Seeded product catalog.');
+const added = seedIfEmpty();
+if (added) console.log(`Added ${added} products to the catalog.`);
+await ensureAdmin();
 
 const app = express();
 app.disable('x-powered-by');
@@ -20,6 +25,10 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/products', productsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/site', siteRouter);
+app.use('/api/admin', adminRouter);
+// Uploaded product photos. Served with nosniff so a mislabelled file can never run as a script.
+app.use('/api/uploads', express.static(UPLOAD_DIR, { index: false, maxAge: '7d', immutable: true, setHeaders: (res) => res.set('X-Content-Type-Options', 'nosniff') }));
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found.')));
 
