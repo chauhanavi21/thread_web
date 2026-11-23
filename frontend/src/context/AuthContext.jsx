@@ -11,12 +11,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(() => Boolean(getToken()));
 
   useEffect(() => {
-    if (!getToken()) return;
+    const initialToken = getToken();
+    if (!initialToken) return;
+    let active = true;
     api
       .me()
-      .then(({ user }) => setUser(user))
-      .catch(() => setToken(null))
-      .finally(() => setLoading(false));
+      .then(({ user }) => { if (active && getToken() === initialToken) setUser(user); })
+      .catch((err) => { if (active && getToken() === initialToken && err.status === 401) setToken(null); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const authenticate = useCallback((result) => {
