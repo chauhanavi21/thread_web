@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { db, dataDir, transaction } from './db.js';
 import { C, LAUNCH_PRODUCTS } from './seedData.js';
 import { BATCH_2_PRODUCTS } from './seedBatch2.js';
 
 // Photos that ship with the storefront. A product whose slug has a file here gets it as its starting image.
-const PHOTO_DIR = path.join(dataDir, '..', '..', 'frontend', 'public', 'images', 'products');
+const PHOTO_DIR = fileURLToPath(new URL('../../frontend/public/images/products/', import.meta.url));
 const photoFor = (slug) => (fs.existsSync(path.join(PHOTO_DIR, `${slug}.jpg`)) ? `/images/products/${slug}.jpg` : null);
 
 const CATEGORIES = [

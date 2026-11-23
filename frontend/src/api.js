@@ -24,8 +24,8 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = 'GET', body, raw, type } = {}) {
-  const headers = {};
+async function request(path, { method = 'GET', body, raw, type, headers: extraHeaders = {} } = {}) {
+  const headers = { ...extraHeaders };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (type) headers['Content-Type'] = type;
   const token = getToken();
@@ -54,7 +54,7 @@ export const api = {
   me: () => request('/auth/me'),
   orders: () => request('/orders'),
   order: (id) => request(`/orders/${id}`),
-  placeOrder: (body) => request('/orders', { method: 'POST', body }),
+  placeOrder: (body, key) => request('/orders', { method: 'POST', body, headers: key ? { 'Idempotency-Key': key } : {} }),
   site: () => request('/site'),
 };
 

@@ -52,6 +52,7 @@ The design follows Dribbble fashion e-commerce references: warm cream paper, nea
 **Buy**
 - The bag is saved in the browser, with a progress bar toward free shipping (free over $100, otherwise a flat $6.99).
 - Create an account or sign in, check out with a shipping address, and see the order afterwards with a confirmation banner.
+- Retry checkout safely after a connection failure, including after reloading the page: the same bag and address return the original order instead of taking stock twice.
 - "My orders" lists past orders with their items, totals and shipping address.
 
 **Run the shop (admin)**
@@ -99,6 +100,24 @@ The first start creates `backend/data/threads.db` and fills it with the catalog.
 
 Optional settings, as environment variables: `PORT` (API port, default 4000), `CORS_ORIGIN` (comma-separated allowed origins, default `http://localhost:5173`) and `JWT_SECRET` (see below).
 
+### Verification
+
+```powershell
+cd backend
+npm ci
+npm test
+
+cd ../frontend
+npm ci
+npx playwright install chromium
+npm run build
+npm run test:e2e
+```
+
+The API suite has **14 tests** against real HTTP requests and SQLite, including stock rollback, concurrent purchases, customer isolation, and checkout retries from a new server process. The **4 Chromium browser tests** cover desktop and phone viewports, including losing a response after an order commits, reloading checkout, and retrying without a second order. Phone checks use emulation, not a physical device.
+
+Tests create temporary databases and use dedicated ports **4400** (API) and **5417** (site); they do not open the shop's database or reuse running servers. CI runs the API suite on Windows and Ubuntu, plus the production build and browser workflows on Ubuntu.
+
 ## How it works
 
 ```
@@ -110,6 +129,8 @@ Browser (React)  ──/api──▶  Vite proxy  ──▶  Express API  ──
 **Prices are never trusted from the browser.** When you check out, the browser sends only variant ids and quantities. The server looks up the real price, checks stock, and works out shipping itself. The whole order runs inside one database transaction: if any line fails (out of stock, unknown item), nothing is written and no stock is taken. Quantities are limited to 1 to 10 per item.
 
 **Each order line is a snapshot.** Name, colour, size and price are copied onto the order line when it is placed. Changing a price or renaming a product later does not rewrite old orders.
+
+**Checkout retries.** The storefront sends an `Idempotency-Key` header. The server saves the key and a normalized request digest in the same transaction as the order and stock changes. Repeating the key with the same items and address returns that order (`200`); different content returns `409`. Keys belong to one customer, survive API restarts, and do not create a new purchase when stock or shop settings subsequently change. Calls without a key remain supported but cannot deduplicate retries. The browser saves only the key and a digest, never the address, for retry recovery.
 
 **Accounts.** Passwords are hashed with scrypt and a random salt, and compared in constant time. A sign-in returns a JWT valid for 7 days. A wrong email and a wrong password give the same message, so the form cannot be used to find out which emails have accounts. Sign-in and sign-up are limited to 30 attempts per 15 minutes per address.
 
@@ -165,7 +186,7 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | GET | `/api/auth/me` | Needs `Authorization: Bearer <token>` |
 | GET | `/api/orders` | Your orders, newest first. Needs a token |
 | GET | `/api/orders/:id` | One of your orders (anyone else's gives 404) |
-| POST | `/api/orders` | `{ items: [{ variantId, qty }], shipping: { name, address, city, zip } }`. Returns the new order, or 409 if stock ran out |
+| POST | `/api/orders` | `{ items: [{ variantId, qty }], shipping: { name, address, city, zip } }`. Optional `Idempotency-Key` header (16–128 letters, digits, `_` or `-`): `201` for a new order, `200` for a matching replay, `409` for changed content or insufficient stock |
 
 **Storefront settings**
 
