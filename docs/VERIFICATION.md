@@ -4,15 +4,17 @@ Verified locally on 23 November 2026 with Node 24.22.1, SQLite, and Chromium. Al
 
 | Check | Result | Scope |
 | --- | --- | --- |
-| `cd backend; npm test` | 34 passed | Real HTTP/SQLite order, return, exchange, inspection, and refund workflows |
+| `cd backend; npm test` | 41 passed | Real HTTP/SQLite order, counter, return, exchange, and refund workflows |
 | `cd frontend; npm run build` | Passed | Production frontend bundle |
-| `cd frontend; npm run test:e2e` | 10 passed | Five workflows each at desktop and phone viewports in Chromium |
+| `cd frontend; npm run test:e2e` | 12 passed | Six workflows each at desktop and phone viewports in Chromium |
 
 The API tests verify server-owned pricing and shipping, immutable price/name snapshots, merged quantity limits, multi-line failure rollback, competing purchases of the last unit, simultaneous retry deduplication, and replay from a separate server process. Retry keys are scoped to a customer and reject changed request contents. Failed checkouts do not consume their key.
 
 Cancellation tests verify ownership, cancellation before dispatch, repeated cancellation, forward-only fulfillment, stock checks when reopening, rollback when a later item cannot be restocked into an order, and dispatch racing cancellation. Replaying an old checkout returns its current cancelled state without reserving stock again.
 
 Return/exchange tests cover partial quantities, original-price refunds, overlapping requests, ownership, return windows, idempotent requests/actions, replacement reservation and release, multi-line rollback, damaged-item inspection, and net revenue. Browser checks follow a customer size exchange through staff approval and inspection, then complete a damaged return and verify both stock counts and the refund record.
+
+Counter tests verify cash/change, price freshness, staff access, receipt deduplication, online/counter competition for the last unit, counter returns, and committed inventory events. The browser keeps a customer product page open while staff record a cash sale, verifies the stock count updates without reloading or losing the selected size, and reloads the staff page to recover the receipt.
 
 The browser suite signs up a real account and buys a product through the storefront. It deliberately loses the response after the order commits, reloads checkout, and verifies that retrying produces one saved order and one stock deduction. It also covers stock errors, confirming or declining cancellation, cancellation persistence after reload, and dispatch while the cancellation confirmation is open. The staff selector is checked against the server's legal next statuses.
 

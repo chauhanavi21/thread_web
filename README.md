@@ -1,4 +1,4 @@
-# Threads — a clothing store
+# Threads — a boutique storefront and shop workspace
 
 A full-stack demo e-commerce site for clothing: **React** (Vite, Tailwind) on the front, **Node + Express** with a built-in **SQLite** database on the back. Everything runs on your own machine. There is nothing to sign up for and no paid service to connect.
 
@@ -66,6 +66,7 @@ Everything on the storefront is controlled from `/admin`, which only accounts wi
 - **Orders:** every customer's order, with legal next statuses offered by the server. Fulfillment progresses from paid to processing to shipped to delivered. Paid or processing orders may be cancelled, restoring stock once. A cancelled order can only reopen as paid, and only if every item is available.
 - **Customers:** see who has signed up and what they have spent, promote someone to admin or demote them.
 - **Returns & exchanges:** open a case from a receipt, approve or reject requests, inspect each returned line, and keep damaged items out of sellable stock. Completed item refunds reduce dashboard revenue and customer spend; shipping is excluded.
+- **Counter sales:** find a product and its size/colour, record cash received, and save a receipt with change due. Counter and online purchases consume the same inventory; open storefront pages receive stock updates automatically. Counter receipts can be returned through the same inspection workflow.
 - **Categories:** rename, reorder, describe and add pictures for the shop sections. They drive the menu, the footer, the shop filters and the home page tiles.
 - **Site settings:** the announcement bar, home page hero and banner copy, the highlights strip, the footer note, free-shipping threshold, flat shipping rate and the per-item quantity limit. The server uses the same shipping and quantity rules when it takes an order.
 
@@ -117,7 +118,7 @@ npm run build
 npm run test:e2e
 ```
 
-The API suite has **34 tests** against real HTTP requests and SQLite, including stock rollback, concurrent purchases, customer isolation, retry persistence, cancellation/dispatch races, partial returns, exchange holds, inspection, and refund accounting. The **10 Chromium browser tests** cover desktop and phone viewports, including a complete customer-to-staff size exchange and damaged return. Phone checks use emulation, not a physical device.
+The API suite has **41 tests** against real HTTP requests and SQLite, including stock rollback, online/counter purchase races, cash and price validation, receipt retries, inventory notifications, returns, exchanges, and refund accounting. The **12 Chromium browser tests** cover desktop and phone viewports, including an exchange/damaged return and a counter sale that updates an already-open storefront. Phone checks use emulation, not a physical device.
 
 Tests create temporary databases and use dedicated ports **4400** (API) and **5417** (site); they do not open the shop's database or reuse running servers. CI runs the API suite on Windows and Ubuntu, plus the production build and browser workflows on Ubuntu.
 
@@ -186,6 +187,7 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | GET | `/api/products` | Query: `category`, `type`, `q`, `sort` (`featured`, `rating`, `price-asc`, `price-desc`, `name`), `featured=1`. Each product includes its `variants` |
 | GET | `/api/products/meta` | Types per department, with counts |
 | GET | `/api/products/:slug` | One product plus up to 4 `related` products |
+| GET | `/api/inventory/events` | Public server-sent events contain only an inventory version; connected pages refetch public product data |
 | POST | `/api/auth/register` | `{ name, email, password }` (password at least 8 characters). Returns `{ token, user }` |
 | POST | `/api/auth/login` | `{ email, password }`. Returns `{ token, user }` |
 | GET | `/api/auth/me` | Needs `Authorization: Bearer <token>` |
@@ -213,6 +215,8 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | PATCH | `/api/admin/orders/:id` | `{ status }`; only the returned `allowedStatuses` are accepted. Cancellation restocks; reopening as paid checks and takes stock atomically |
 | GET, POST | `/api/admin/returns` | List/filter cases by `?status=`; POST opens a case from an `orderId` and the same return payload |
 | POST | `/api/admin/returns/:id/actions` | `{ action: "approve", "reject" or "complete", inspections?: [{ itemId, restock }], confirmRefund? }`; completion requires every inspection and explicit refund acknowledgement |
+| GET, POST | `/api/admin/counter-sales` | Recent cash receipts; POST takes `{ items, customerName?, cashReceivedCents, expectedTotalCents }` and requires `Idempotency-Key`. No shipping fee; stale totals are rejected |
+| GET | `/api/admin/counter-sales/:id` | Staff-only saved counter receipt |
 | GET | `/api/admin/users` | Customers with order counts and spend |
 | PATCH, DELETE | `/api/admin/users/:id` | `{ role }`; you cannot demote yourself or the last admin |
 | GET, POST, PUT, DELETE | `/api/admin/categories[/:key]` | A category with products cannot be deleted |
@@ -240,7 +244,7 @@ Errors come back as `{ "error": "message" }` with a matching status code.
 
 ## Limits of the demo
 
-- **Payments are a stand-in.** Placing an order marks it `paid` immediately. No card is taken and there is no payment provider.
+- **Online payments are a stand-in.** Shipping orders are marked `paid` immediately. Counter sales record cash handled by staff; Threads does not process cards or issue electronic refunds.
 - **No email.** The "stay in the loop" box on the home page stores nothing, and there are no order emails.
 - **Shipping is one flat rule:** a free-over amount and a flat rate, both editable in the admin. There are no zones or carriers.
 - **Admin has no audit log or per-staff permissions.** Every admin can do everything.
