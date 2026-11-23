@@ -4,13 +4,15 @@ Verified locally on 23 November 2026 with Node 24.22.1, SQLite, and Chromium. Al
 
 | Check | Result | Scope |
 | --- | --- | --- |
-| `cd backend; npm test` | 23 passed | Real HTTP requests, SQLite transactions, access control, stock, retry persistence, and order transitions |
+| `cd backend; npm test` | 34 passed | Real HTTP/SQLite order, return, exchange, inspection, and refund workflows |
 | `cd frontend; npm run build` | Passed | Production frontend bundle |
-| `cd frontend; npm run test:e2e` | 8 passed | Four workflows each at desktop and phone viewports in Chromium |
+| `cd frontend; npm run test:e2e` | 10 passed | Five workflows each at desktop and phone viewports in Chromium |
 
 The API tests verify server-owned pricing and shipping, immutable price/name snapshots, merged quantity limits, multi-line failure rollback, competing purchases of the last unit, simultaneous retry deduplication, and replay from a separate server process. Retry keys are scoped to a customer and reject changed request contents. Failed checkouts do not consume their key.
 
 Cancellation tests verify ownership, cancellation before dispatch, repeated cancellation, forward-only fulfillment, stock checks when reopening, rollback when a later item cannot be restocked into an order, and dispatch racing cancellation. Replaying an old checkout returns its current cancelled state without reserving stock again.
+
+Return/exchange tests cover partial quantities, original-price refunds, overlapping requests, ownership, return windows, idempotent requests/actions, replacement reservation and release, multi-line rollback, damaged-item inspection, and net revenue. Browser checks follow a customer size exchange through staff approval and inspection, then complete a damaged return and verify both stock counts and the refund record.
 
 The browser suite signs up a real account and buys a product through the storefront. It deliberately loses the response after the order commits, reloads checkout, and verifies that retrying produces one saved order and one stock deduction. It also covers stock errors, confirming or declining cancellation, cancellation persistence after reload, and dispatch while the cancellation confirmation is open. The staff selector is checked against the server's legal next statuses.
 
