@@ -53,3 +53,32 @@ test('a customer exchanges a size and staff inspect a subsequent damaged return'
   await expect(page.getByText(/kept out of sellable stock/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('completed-exchange-and-return.png'), fullPage: true });
 });
+
+test('recording a counter sale updates an already-open storefront and saves a cash receipt', async ({ page, request, context }, testInfo) => {
+  const { product, adminToken } = await boutiqueScenario(request);
+  const storefront = await context.newPage();
+  await storefront.goto(`/product/${product.slug}`);
+  await storefront.getByRole('button', { name: 'M', exact: true }).click();
+  await expect(storefront.getByText('Only 5 left in Ink, M.', { exact: true })).toBeVisible();
+
+  await pageAccount(page, adminToken, '/admin/counter-sales');
+  await page.getByRole('searchbox', { name: 'Find a product, size or colour', exact: true }).fill(product.slug);
+  await page.getByRole('button', { name: 'Add Boutique Size Tee Ink M', exact: true }).click();
+  await page.getByRole('spinbutton', { name: 'Quantity for Boutique Size Tee M', exact: true }).fill('2');
+  await page.getByRole('textbox', { name: 'Customer name (optional)', exact: true }).fill('Walk-in fixture');
+  await page.getByRole('spinbutton', { name: 'Cash received ($)', exact: true }).fill('60');
+  await page.getByRole('button', { name: 'Record cash sale', exact: true }).click();
+  const receipt = page.getByRole('region', { name: /Counter receipt/ });
+  await expect(receipt.getByRole('heading', { name: /Counter receipt #/ })).toBeVisible();
+  await expect(receipt.getByText('$50.00', { exact: true })).toHaveCount(2);
+  await expect(receipt.getByText('$10.00', { exact: true })).toBeVisible();
+  const receiptNumber = (await receipt.getByRole('heading').textContent()).match(/#(\d+)/)[1];
+  await expect(storefront.getByText('Only 3 left in Ink, M.', { exact: true })).toBeVisible();
+  await expect(storefront.getByRole('button', { name: 'M', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
+  await page.getByRole('button', { name: new RegExp(`^Receipt #${receiptNumber} · Walk-in fixture`) }).click();
+  await expect(page.getByRole('region', { name: /Counter receipt/ })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('counter-sale-receipt.png'), fullPage: true });
+  await storefront.close();
+});

@@ -48,7 +48,7 @@ export default function Orders() {
                   <button className="flex min-w-0 flex-1 items-center gap-4 text-left" onClick={() => setOpen(isOpen ? null : o.id)} aria-expanded={isOpen}>
                     <span className="font-semibold">#{o.id}</span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm">{o.customer.name} <span className="text-brand-500">· {o.customer.email}</span></span>
+                      <span className="block truncate text-sm">{o.customer.name} <span className="text-brand-500">· {o.channel === 'counter' ? 'Counter sale' : o.customer.email}</span></span>
                       <span className="block text-xs text-brand-500">{formatDateTime(o.createdAt)} · {o.items.reduce((n, i) => n + i.qty, 0)} items</span>
                     </span>
                   </button>

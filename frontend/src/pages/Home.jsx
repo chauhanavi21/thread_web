@@ -8,6 +8,7 @@ import Reveal from '../components/Reveal.jsx';
 import Slider from '../components/Slider.jsx';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
+import { useInventoryVersion } from '../context/InventoryContext.jsx';
 
 function Subscribe() {
   const [done, setDone] = useState(false);
@@ -37,9 +38,10 @@ function Subscribe() {
 }
 
 export default function Home() {
+  const inventoryVersion = useInventoryVersion();
   const { categories, settings, heroProduct, bannerProduct, loaded } = useSite();
-  const featured = useAsync(() => api.products({ featured: '1' }), []);
-  const all = useAsync(() => api.products({ sort: 'rating' }), []);
+  const featured = useAsync(() => api.products({ featured: '1' }), [inventoryVersion]);
+  const all = useAsync(() => api.products({ sort: 'rating' }), [inventoryVersion]);
   const slides = featured.data?.slice(0, 10) ?? [];
   const grid = all.data?.slice(0, 8) ?? [];
 

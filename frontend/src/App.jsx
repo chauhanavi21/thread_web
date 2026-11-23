@@ -21,6 +21,7 @@ import Customers from './admin/Customers.jsx';
 import Categories from './admin/Categories.jsx';
 import SiteSettings from './admin/SiteSettings.jsx';
 import AdminReturns from './admin/Returns.jsx';
+import CounterSales from './admin/CounterSales.jsx';
 
 function RequireAuth({ children }) {
   const { user, loading, signedOutOnPurpose } = useAuth();
@@ -71,6 +72,7 @@ export default function App() {
               <Route path="products/:id" element={<ProductEditor />} />
               <Route path="orders" element={<AdminOrders />} />
               <Route path="returns" element={<AdminReturns />} />
+              <Route path="counter-sales" element={<CounterSales />} />
               <Route path="customers" element={<Customers />} />
               <Route path="categories" element={<Categories />} />
               <Route path="settings" element={<SiteSettings />} />

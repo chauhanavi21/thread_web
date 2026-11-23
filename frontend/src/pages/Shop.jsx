@@ -4,6 +4,7 @@ import ProductCard from '../components/ProductCard.jsx';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
 import { useSite } from '../context/SiteContext.jsx';
+import { useInventoryVersion } from '../context/InventoryContext.jsx';
 
 const SORTS = [
   ['featured', 'Featured'],
@@ -16,6 +17,7 @@ const SORTS = [
 const titleCase = (s) => s.replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
 export default function Shop() {
+  const inventoryVersion = useInventoryVersion();
   const [params, setParams] = useSearchParams();
   const { categories } = useSite();
   const labels = Object.fromEntries(categories.map((c) => [c.key, c.title]));
@@ -25,7 +27,7 @@ export default function Shop() {
   const sort = params.get('sort') || 'featured';
 
   const meta = useAsync(() => api.productMeta(), []);
-  const { data, error, loading } = useAsync(() => api.products({ category, type, q, sort }), [category, type, q, sort]);
+  const { data, error, loading } = useAsync(() => api.products({ category, type, q, sort }), [category, type, q, sort, inventoryVersion]);
 
   const update = (changes) => {
     const next = new URLSearchParams(params);
