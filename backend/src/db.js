@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { notifyInventoryChanged } from './inventoryEvents.js';
 
 export const dataDir = process.env.THREADS_DATA_DIR
   ? path.resolve(process.env.THREADS_DATA_DIR)
@@ -139,6 +140,12 @@ addColumn('users', 'role', "TEXT NOT NULL DEFAULT 'customer'"); // customer | ad
 addColumn('products', 'active', 'INTEGER NOT NULL DEFAULT 1'); // 0 = hidden from the shop
 addColumn('products', 'image', 'TEXT'); // URL of the product photo, or null for the drawn fallback
 addColumn('orders', 'completed_at', 'TEXT');
+addColumn('orders', 'channel', "TEXT NOT NULL DEFAULT 'online' CHECK (channel IN ('online', 'counter'))");
+addColumn('orders', 'fulfillment', "TEXT NOT NULL DEFAULT 'shipping' CHECK (fulfillment IN ('shipping', 'pickup', 'counter'))");
+addColumn('orders', 'payment_method', "TEXT NOT NULL DEFAULT 'demo' CHECK (payment_method IN ('demo', 'cash'))");
+addColumn('orders', 'payment_status', "TEXT NOT NULL DEFAULT 'paid' CHECK (payment_status IN ('paid', 'unpaid'))");
+addColumn('orders', 'cash_received_cents', 'INTEGER CHECK (cash_received_cents >= 0)');
+addColumn('orders', 'created_by', 'INTEGER REFERENCES users(id)');
 // Historical deliveries did not record a completion time; retain their original
 // creation time as the conservative start of the return window.
 db.exec("UPDATE orders SET completed_at = created_at WHERE status = 'delivered' AND completed_at IS NULL");
@@ -149,6 +156,7 @@ export function transaction(fn) {
   try {
     const result = fn();
     db.exec('COMMIT');
+    queueMicrotask(notifyInventoryChanged);
     return result;
   } catch (err) {
     db.exec('ROLLBACK');

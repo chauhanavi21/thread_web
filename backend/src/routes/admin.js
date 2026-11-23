@@ -47,7 +47,7 @@ router.get('/stats', (_req, res) => {
       )
       .all(),
     recentOrders: db
-      .prepare('SELECT o.id, o.total_cents AS totalCents, o.status, o.created_at AS createdAt, u.name AS customer FROM orders o JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 6')
+      .prepare("SELECT o.id, o.total_cents AS totalCents, o.status, o.created_at AS createdAt, CASE WHEN o.channel = 'counter' THEN o.ship_name ELSE u.name END AS customer FROM orders o JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 6")
       .all(),
     topProducts: db
       .prepare(
@@ -211,6 +211,10 @@ function adminOrder(row) {
   return {
     id: row.id,
     status: row.status,
+    channel: row.channel,
+    fulfillment: row.fulfillment,
+    paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
     allowedStatuses: allowedOrderStatuses(row.status),
     createdAt: row.created_at,
     subtotalCents: row.subtotal_cents,
@@ -218,7 +222,7 @@ function adminOrder(row) {
     totalCents: row.total_cents,
     returnWindowEndsAt: eligibility.returnWindowEndsAt,
     returnCases: orderReturnCases(row.id),
-    customer: { id: row.user_id, name: row.user_name, email: row.user_email },
+    customer: row.channel === 'counter' ? { id: null, name: row.ship_name, email: null } : { id: row.user_id, name: row.user_name, email: row.user_email },
     shipping: { name: row.ship_name, address: row.ship_address, city: row.ship_city, zip: row.ship_zip },
     items: items.map((i) => ({ id: i.id, returnableQty: eligibility.availableQty(i), productId: i.product_id, variantId: i.variant_id, name: i.name, color: i.color, colorHex: i.color_hex, size: i.size, priceCents: i.price_cents, qty: i.qty })),
   };
@@ -255,7 +259,7 @@ router.get('/users', (_req, res) => {
       `SELECT u.id, u.name, u.email, u.role, u.created_at AS createdAt,
               COUNT(o.id) AS orderCount, COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total_cents -
                 (SELECT COALESCE(SUM(refund_cents), 0) FROM return_cases WHERE order_id = o.id AND status = 'completed') END), 0) AS spentCents
-       FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id`,
+       FROM users u LEFT JOIN orders o ON o.user_id = u.id AND o.channel = 'online' GROUP BY u.id ORDER BY u.id`,
     )
     .all();
   res.json(rows);
