@@ -54,6 +54,7 @@ The design follows Dribbble fashion e-commerce references: warm cream paper, nea
 - Create an account or sign in, check out with a shipping address, and see the order afterwards with a confirmation banner.
 - Retry checkout safely after a connection failure, including after reloading the page: the same bag and address return the original order instead of taking stock twice.
 - "My orders" lists past orders with their items, totals and shipping address.
+- Cancel your own paid or processing order from its detail page, with a confirmation before releasing the items. Shipped and delivered orders cannot be cancelled.
 
 **Run the shop (admin)**
 
@@ -61,7 +62,7 @@ Everything on the storefront is controlled from `/admin`, which only accounts wi
 
 - **Dashboard:** revenue, orders to fulfil, low-stock variants, recent orders and best sellers.
 - **Products:** add, edit, hide or delete products; set price, rating, featured flag, photo (upload a JPEG, PNG or WebP) and a stock number for every colour and size. Hidden products disappear from the shop but keep their order history.
-- **Orders:** every customer's order, with a status you can change (paid, processing, shipped, delivered, cancelled). Cancelling puts the items back in stock, and reopening takes them out again.
+- **Orders:** every customer's order, with legal next statuses offered by the server. Fulfillment progresses from paid to processing to shipped to delivered. Paid or processing orders may be cancelled, restoring stock once. A cancelled order can only reopen as paid, and only if every item is available.
 - **Customers:** see who has signed up and what they have spent, promote someone to admin or demote them.
 - **Categories:** rename, reorder, describe and add pictures for the shop sections. They drive the menu, the footer, the shop filters and the home page tiles.
 - **Site settings:** the announcement bar, home page hero and banner copy, the highlights strip, the footer note, free-shipping threshold, flat shipping rate and the per-item quantity limit. The server uses the same shipping and quantity rules when it takes an order.
@@ -114,7 +115,7 @@ npm run build
 npm run test:e2e
 ```
 
-The API suite has **14 tests** against real HTTP requests and SQLite, including stock rollback, concurrent purchases, customer isolation, and checkout retries from a new server process. The **4 Chromium browser tests** cover desktop and phone viewports, including losing a response after an order commits, reloading checkout, and retrying without a second order. Phone checks use emulation, not a physical device.
+The API suite has **23 tests** against real HTTP requests and SQLite, including stock rollback, concurrent purchases, customer isolation, checkout retries from a new server process, cancellation/dispatch races, and a failed multi-line reopen. The **8 Chromium browser tests** cover desktop and phone viewports: lost-response/reload recovery, stock conflicts, customer cancellation, and an order dispatched while cancellation is open. They also verify that staff see only legal next statuses. Phone checks use emulation, not a physical device.
 
 Tests create temporary databases and use dedicated ports **4400** (API) and **5417** (site); they do not open the shop's database or reuse running servers. CI runs the API suite on Windows and Ubuntu, plus the production build and browser workflows on Ubuntu.
 
@@ -124,13 +125,15 @@ Tests create temporary databases and use dedicated ports **4400** (API) and **54
 Browser (React)  ──/api──▶  Vite proxy  ──▶  Express API  ──▶  SQLite (backend/data/threads.db)
 ```
 
-**Products and variants.** A product is one design (a hoodie). A *variant* is one size in one colour of it. The catalog has 25 products and 369 variants, and stock is stored on the variant. The product list API returns each product together with its variants, so the page can show which sizes are available without a second request.
+**Products and variants.** A product is one design (a hoodie). A *variant* is one size in one colour of it. The catalog has 75 products, and stock is stored on the variant. The product list API returns each product together with its variants, so the page can show which sizes are available without a second request.
 
 **Prices are never trusted from the browser.** When you check out, the browser sends only variant ids and quantities. The server looks up the real price, checks stock, and works out shipping itself. The whole order runs inside one database transaction: if any line fails (out of stock, unknown item), nothing is written and no stock is taken. Quantities are limited to 1 to 10 per item.
 
 **Each order line is a snapshot.** Name, colour, size and price are copied onto the order line when it is placed. Changing a price or renaming a product later does not rewrite old orders.
 
 **Checkout retries.** The storefront sends an `Idempotency-Key` header. The server saves the key and a normalized request digest in the same transaction as the order and stock changes. Repeating the key with the same items and address returns that order (`200`); different content returns `409`. Keys belong to one customer, survive API restarts, and do not create a new purchase when stock or shop settings subsequently change. Calls without a key remain supported but cannot deduplicate retries. The browser saves only the key and a digest, never the address, for retry recovery.
+
+**Cancellation and fulfillment.** Customer and admin changes use the same transactional status rules. Repeating a cancellation does not restock twice. Competing dispatch and cancellation requests leave one legal outcome. Shipped and delivered orders cannot be cancelled or moved backwards. Reopening a cancelled order takes every item's stock together or rolls back everything; a customer cannot reopen orders. Old checkout retries return a cancelled order as cancelled.
 
 **Accounts.** Passwords are hashed with scrypt and a random salt, and compared in constant time. A sign-in returns a JWT valid for 7 days. A wrong email and a wrong password give the same message, so the form cannot be used to find out which emails have accounts. Sign-in and sign-up are limited to 30 attempts per 15 minutes per address.
 
@@ -186,6 +189,7 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | GET | `/api/auth/me` | Needs `Authorization: Bearer <token>` |
 | GET | `/api/orders` | Your orders, newest first. Needs a token |
 | GET | `/api/orders/:id` | One of your orders (anyone else's gives 404) |
+| POST | `/api/orders/:id/cancel` | Cancel your own paid or processing order; repeated cancellation succeeds without another stock change. Returns `404` for another customer's order and `409` after dispatch |
 | POST | `/api/orders` | `{ items: [{ variantId, qty }], shipping: { name, address, city, zip } }`. Optional `Idempotency-Key` header (16–128 letters, digits, `_` or `-`): `201` for a new order, `200` for a matching replay, `409` for changed content or insufficient stock |
 
 **Storefront settings**
@@ -202,7 +206,7 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | GET, POST | `/api/admin/products` | List all (including hidden), create with variants |
 | GET, PUT, PATCH, DELETE | `/api/admin/products/:id` | PUT replaces fields and variants; PATCH toggles `active` / `featured`; DELETE is refused (409) if past orders use the product |
 | GET | `/api/admin/orders?status=` | All orders with customer and items |
-| PATCH | `/api/admin/orders/:id` | `{ status }`; cancelling restocks |
+| PATCH | `/api/admin/orders/:id` | `{ status }`; only the returned `allowedStatuses` are accepted. Cancellation restocks; reopening as paid checks and takes stock atomically |
 | GET | `/api/admin/users` | Customers with order counts and spend |
 | PATCH, DELETE | `/api/admin/users/:id` | `{ role }`; you cannot demote yourself or the last admin |
 | GET, POST, PUT, DELETE | `/api/admin/categories[/:key]` | A category with products cannot be deleted |

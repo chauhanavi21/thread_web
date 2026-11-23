@@ -1,0 +1,24 @@
+# Order workflow verification
+
+Verified locally on 23 November 2026 with Node 24.22.1, SQLite, and Chromium. All customers, addresses, products, and credentials used by the tests are fictional. The test runners create temporary databases; the store's normal database is not used.
+
+| Check | Result | Scope |
+| --- | --- | --- |
+| `cd backend; npm test` | 23 passed | Real HTTP requests, SQLite transactions, access control, stock, retry persistence, and order transitions |
+| `cd frontend; npm run build` | Passed | Production frontend bundle |
+| `cd frontend; npm run test:e2e` | 8 passed | Four workflows each at desktop and phone viewports in Chromium |
+
+The API tests verify server-owned pricing and shipping, immutable price/name snapshots, merged quantity limits, multi-line failure rollback, competing purchases of the last unit, simultaneous retry deduplication, and replay from a separate server process. Retry keys are scoped to a customer and reject changed request contents. Failed checkouts do not consume their key.
+
+Cancellation tests verify ownership, cancellation before dispatch, repeated cancellation, forward-only fulfillment, stock checks when reopening, rollback when a later item cannot be restocked into an order, and dispatch racing cancellation. Replaying an old checkout returns its current cancelled state without reserving stock again.
+
+The browser suite signs up a real account and buys a product through the storefront. It deliberately loses the response after the order commits, reloads checkout, and verifies that retrying produces one saved order and one stock deduction. It also covers stock errors, confirming or declining cancellation, cancellation persistence after reload, and dispatch while the cancellation confirmation is open. The staff selector is checked against the server's legal next statuses.
+
+GitHub Actions runs API tests on Ubuntu and Windows with Node 24, and the production build and browser suite on Ubuntu. Check the workflow run attached to each pull request for its result.
+
+## Limits
+
+- Phone tests use viewport/device emulation in Chromium, not a physical phone or Safari.
+- Payments are simulated. No payment processor, refund service, carrier, cloud deployment, sales, or customer demand was verified.
+- The tests exercise the local application. They are not a production load test or an accessibility certification.
+- The business score remains an estimate of a clothing business. Engineering checks support a higher implementation-completeness rating; they do not establish better demand, margins, retention, or acquisition costs.
