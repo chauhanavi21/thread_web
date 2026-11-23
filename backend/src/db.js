@@ -13,6 +13,7 @@ export const db = new DatabaseSync(path.join(dataDir, 'threads.db'));
 db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
+  PRAGMA busy_timeout = 5000;
 
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +101,33 @@ db.exec(`
     price_cents INTEGER NOT NULL,
     qty         INTEGER NOT NULL CHECK (qty > 0)
   );
+
+  CREATE TABLE IF NOT EXISTS return_cases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    requested_by INTEGER NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL CHECK (kind IN ('return', 'exchange')),
+    status TEXT NOT NULL DEFAULT 'requested' CHECK (status IN ('requested', 'approved', 'completed', 'rejected', 'cancelled')),
+    reason TEXT NOT NULL,
+    refund_cents INTEGER NOT NULL DEFAULT 0 CHECK (refund_cents >= 0),
+    request_key TEXT,
+    request_hash TEXT,
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    UNIQUE (requested_by, request_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_return_cases_order ON return_cases(order_id);
+  CREATE TABLE IF NOT EXISTS return_case_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id INTEGER NOT NULL REFERENCES return_cases(id) ON DELETE CASCADE,
+    order_item_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+    qty INTEGER NOT NULL CHECK (qty > 0),
+    replacement_variant_id INTEGER REFERENCES variants(id),
+    replacement_color TEXT,
+    replacement_size TEXT,
+    restock INTEGER CHECK (restock IN (0, 1)),
+    UNIQUE (case_id, order_item_id)
+  );
 `);
 
 // Columns added after the first release. Existing databases are upgraded in place.
@@ -110,6 +138,10 @@ function addColumn(table, column, ddl) {
 addColumn('users', 'role', "TEXT NOT NULL DEFAULT 'customer'"); // customer | admin
 addColumn('products', 'active', 'INTEGER NOT NULL DEFAULT 1'); // 0 = hidden from the shop
 addColumn('products', 'image', 'TEXT'); // URL of the product photo, or null for the drawn fallback
+addColumn('orders', 'completed_at', 'TEXT');
+// Historical deliveries did not record a completion time; retain their original
+// creation time as the conservative start of the return window.
+db.exec("UPDATE orders SET completed_at = created_at WHERE status = 'delivered' AND completed_at IS NULL");
 
 /** Runs fn inside a write transaction; rolls back if it throws. */
 export function transaction(fn) {

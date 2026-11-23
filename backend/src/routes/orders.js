@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { createHash } from 'node:crypto';
 import { db, transaction } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, str } from '../http.js';
 import { getSettings } from '../settings.js';
 import { canCancelOrder, changeOrderStatus } from '../orderStatus.js';
+import { fingerprint, validateRequestKey } from '../idempotency.js';
+import { createReturnCase, orderReturnCases, returnEligibility } from '../returns.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -14,6 +15,7 @@ function loadOrder(orderId) {
   const items = db
     .prepare('SELECT oi.*, p.slug, p.type, p.image FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? ORDER BY oi.id')
     .all(orderId);
+  const eligibility = returnEligibility(order);
   return {
     id: order.id,
     status: order.status,
@@ -22,8 +24,12 @@ function loadOrder(orderId) {
     subtotalCents: order.subtotal_cents,
     shippingCents: order.shipping_cents,
     totalCents: order.total_cents,
+    returnWindowEndsAt: eligibility.returnWindowEndsAt,
+    returnCases: orderReturnCases(orderId),
     shipping: { name: order.ship_name, address: order.ship_address, city: order.ship_city, zip: order.ship_zip },
     items: items.map((i) => ({
+      id: i.id,
+      returnableQty: eligibility.availableQty(i),
       productId: i.product_id,
       variantId: i.variant_id,
       slug: i.slug,
@@ -56,15 +62,18 @@ router.post('/:id/cancel', (req, res) => {
   res.json(loadOrder(orderId));
 });
 
+router.post('/:id/returns', (req, res) => {
+  const result = createReturnCase(Number(req.params.id), req.userId, req.body, { requestKey: req.get('Idempotency-Key') });
+  res.status(result.replayed ? 200 : 201).json(result.returnCase);
+});
+
 // POST /api/orders   { items: [{ variantId, qty }], shipping: { name, address, city, zip } }
 // Prices are always read from the database, never trusted from the client.
 // Payment is a local stand-in: any order that passes validation is marked "paid".
 router.post('/', (req, res) => {
   const body = req.body ?? {};
   const requestKey = req.get('Idempotency-Key');
-  if (requestKey !== undefined && !/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
-    throw new HttpError(400, 'Idempotency-Key must be 16 to 128 letters, numbers, underscores or hyphens.');
-  }
+  validateRequestKey(requestKey);
   const shipping = {
     name: str(body.shipping?.name, { field: 'Full name', max: 100 }),
     address: str(body.shipping?.address, { field: 'Address', max: 200 }),
@@ -86,10 +95,10 @@ router.post('/', (req, res) => {
     wanted.set(variantId, (wanted.get(variantId) ?? 0) + qty);
   }
 
-  const requestHash = createHash('sha256').update(JSON.stringify({
+  const requestHash = fingerprint({
     shipping,
     items: [...wanted].sort(([a], [b]) => a - b),
-  })).digest('hex');
+  });
   let replayed = false;
 
   const orderId = transaction(() => {
