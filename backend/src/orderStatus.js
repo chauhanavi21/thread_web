@@ -41,5 +41,6 @@ export function changeOrderStatus(orderId, status, customerId) {
       }
     }
     db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, orderId);
+    if (status === 'delivered') db.prepare('UPDATE orders SET completed_at = ? WHERE id = ?').run(new Date().toISOString(), orderId);
   });
 }

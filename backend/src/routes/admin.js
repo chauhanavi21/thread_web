@@ -8,6 +8,7 @@ import { HttpError, str } from '../http.js';
 import { getSettings, updateSettings } from '../settings.js';
 import { listProducts, toProducts } from './products.js';
 import { ORDER_STATUSES, allowedOrderStatuses, changeOrderStatus } from '../orderStatus.js';
+import { orderReturnCases, returnEligibility } from '../returns.js';
 
 export const UPLOAD_DIR = path.join(dataDir, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -36,7 +37,7 @@ router.get('/stats', (_req, res) => {
     activeProducts: one('SELECT COUNT(*) AS n FROM products WHERE active = 1').n,
     customers: one("SELECT COUNT(*) AS n FROM users WHERE role = 'customer'").n,
     orders: one('SELECT COUNT(*) AS n FROM orders').n,
-    revenueCents: one(`SELECT COALESCE(SUM(total_cents), 0) AS n FROM orders WHERE ${live}`).n,
+    revenueCents: one(`SELECT COALESCE(SUM(total_cents), 0) - (SELECT COALESCE(SUM(refund_cents), 0) FROM return_cases WHERE status = 'completed') AS n FROM orders WHERE ${live}`).n,
     toFulfil: one("SELECT COUNT(*) AS n FROM orders WHERE status IN ('paid', 'processing')").n,
     lowStock: db
       .prepare(
@@ -50,7 +51,10 @@ router.get('/stats', (_req, res) => {
       .all(),
     topProducts: db
       .prepare(
-        `SELECT oi.product_id AS productId, oi.name, SUM(oi.qty) AS sold
+        `SELECT oi.product_id AS productId, oi.name, SUM(oi.qty - COALESCE((
+           SELECT SUM(ri.qty) FROM return_case_items ri JOIN return_cases rc ON rc.id = ri.case_id
+           WHERE ri.order_item_id = oi.id AND rc.kind = 'return' AND rc.status = 'completed'
+         ), 0)) AS sold
          FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.${live}
          GROUP BY oi.product_id ORDER BY sold DESC LIMIT 5`,
       )
@@ -108,12 +112,18 @@ function syncVariants(productId, rows) {
   const keep = new Set(rows.filter((r) => r.id).map((r) => r.id));
   for (const r of rows) {
     if (r.id && !current.some((c) => c.id === r.id)) throw new HttpError(400, 'A variant does not belong to this product.');
+    const previous = current.find((c) => c.id === r.id);
+    if (previous && (previous.color !== r.color || previous.size !== r.size) && (
+      db.prepare('SELECT 1 FROM order_items WHERE variant_id = ?').get(r.id) ||
+      db.prepare('SELECT 1 FROM return_case_items WHERE replacement_variant_id = ?').get(r.id)
+    )) throw new HttpError(409, 'A sold or requested variant cannot be renamed. Add a new variant instead.');
   }
   for (const c of current) {
     if (keep.has(c.id)) continue;
     if (db.prepare('SELECT 1 FROM order_items WHERE variant_id = ?').get(c.id)) {
       throw new HttpError(409, `${c.color} / ${c.size} appears on past orders and cannot be removed. Set its stock to 0 instead.`);
     }
+    if (db.prepare('SELECT 1 FROM return_case_items WHERE replacement_variant_id = ?').get(c.id)) throw new HttpError(409, 'This variant appears in an exchange and cannot be removed.');
     db.prepare('DELETE FROM variants WHERE id = ?').run(c.id);
   }
   // Two passes so swapping names between rows can't trip the unique (product, colour, size) index.
@@ -197,6 +207,7 @@ router.delete('/products/:id', (req, res) => {
 
 function adminOrder(row) {
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(row.id);
+  const eligibility = returnEligibility(row);
   return {
     id: row.id,
     status: row.status,
@@ -205,9 +216,11 @@ function adminOrder(row) {
     subtotalCents: row.subtotal_cents,
     shippingCents: row.shipping_cents,
     totalCents: row.total_cents,
+    returnWindowEndsAt: eligibility.returnWindowEndsAt,
+    returnCases: orderReturnCases(row.id),
     customer: { id: row.user_id, name: row.user_name, email: row.user_email },
     shipping: { name: row.ship_name, address: row.ship_address, city: row.ship_city, zip: row.ship_zip },
-    items: items.map((i) => ({ productId: i.product_id, variantId: i.variant_id, name: i.name, color: i.color, colorHex: i.color_hex, size: i.size, priceCents: i.price_cents, qty: i.qty })),
+    items: items.map((i) => ({ id: i.id, returnableQty: eligibility.availableQty(i), productId: i.product_id, variantId: i.variant_id, name: i.name, color: i.color, colorHex: i.color_hex, size: i.size, priceCents: i.price_cents, qty: i.qty })),
   };
 }
 
@@ -240,7 +253,8 @@ router.get('/users', (_req, res) => {
   const rows = db
     .prepare(
       `SELECT u.id, u.name, u.email, u.role, u.created_at AS createdAt,
-              COUNT(o.id) AS orderCount, COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total_cents END), 0) AS spentCents
+              COUNT(o.id) AS orderCount, COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total_cents -
+                (SELECT COALESCE(SUM(refund_cents), 0) FROM return_cases WHERE order_id = o.id AND status = 'completed') END), 0) AS spentCents
        FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id ORDER BY u.id`,
     )
     .all();
@@ -268,6 +282,7 @@ router.delete('/users/:id', (req, res) => {
   if (userId === req.userId) throw new HttpError(400, 'You cannot delete your own account.');
   if (user.role === 'admin') throw new HttpError(400, 'Make this user a customer before deleting them.');
   if (db.prepare('SELECT 1 FROM orders WHERE user_id = ?').get(userId)) throw new HttpError(409, 'This customer has orders, so the account cannot be deleted.');
+  if (db.prepare('SELECT 1 FROM return_cases WHERE requested_by = ?').get(userId)) throw new HttpError(409, 'This account has return records and cannot be deleted.');
   db.prepare('DELETE FROM users WHERE id = ?').run(userId);
   res.status(204).end();
 });

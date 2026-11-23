@@ -5,6 +5,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
   }
   body {
     @apply overflow-x-clip bg-brand-50 font-sans text-brand-900 antialiased;

@@ -35,6 +35,7 @@ export default function SiteSettings() {
         freeShippingOverCents: Math.round(Number(freeShipping) * 100),
         flatShippingCents: Math.round(Number(flatShipping) * 100),
         maxQtyPerItem: Number(f.maxQtyPerItem),
+        returnWindowDays: Number(f.returnWindowDays),
       });
       await refresh();
       flash('Saved. The storefront is updated.');
@@ -107,6 +108,7 @@ export default function SiteSettings() {
             <Field label="Max per item"><input className="input" type="number" min="1" max="100" required value={f.maxQtyPerItem} onChange={set('maxQtyPerItem')} /></Field>
           </div>
           <p className="text-xs text-brand-500">Applied in the bag and enforced by the server when an order is placed. The text on the home page highlights is separate, so update it too if you change the free-shipping amount.</p>
+          <Field label="Return window (days)" hint="Starts at delivery or collection. Applies to new return and exchange requests."><input className="input" type="number" min="1" max="90" required value={f.returnWindowDays} onChange={set('returnWindowDays')} /></Field>
         </section>
 
         <section className="panel space-y-4">

@@ -25,6 +25,7 @@ const FIELDS = {
   freeShippingOverCents: { kind: 'int', min: 0, max: 10_000_000, default: 10000 },
   flatShippingCents: { kind: 'int', min: 0, max: 100_000, default: 699 },
   maxQtyPerItem: { kind: 'int', min: 1, max: 100, default: 10 },
+  returnWindowDays: { kind: 'int', min: 1, max: 90, default: 30 },
 };
 
 export function getSettings() {

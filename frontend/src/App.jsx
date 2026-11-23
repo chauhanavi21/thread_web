@@ -20,6 +20,7 @@ import AdminOrders from './admin/Orders.jsx';
 import Customers from './admin/Customers.jsx';
 import Categories from './admin/Categories.jsx';
 import SiteSettings from './admin/SiteSettings.jsx';
+import AdminReturns from './admin/Returns.jsx';
 
 function RequireAuth({ children }) {
   const { user, loading, signedOutOnPurpose } = useAuth();
@@ -43,7 +44,7 @@ function Page() {
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [pathname]);
   return null;
 }
@@ -69,6 +70,7 @@ export default function App() {
               <Route path="products" element={<AdminProducts />} />
               <Route path="products/:id" element={<ProductEditor />} />
               <Route path="orders" element={<AdminOrders />} />
+              <Route path="returns" element={<AdminReturns />} />
               <Route path="customers" element={<Customers />} />
               <Route path="categories" element={<Categories />} />
               <Route path="settings" element={<SiteSettings />} />
