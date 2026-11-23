@@ -203,3 +203,111 @@ test('hidden products cannot be bought and existing clients can omit retry keys'
   assert.equal((await place()).status, 201);
   assert.equal(orderCount(), 2);
 });
+
+const cancel = (id, options = {}) => request(`/orders/${id}/cancel`, { method: 'POST', ...options });
+const advance = (id, status) => request(`/admin/orders/${id}`, { method: 'PATCH', body: { status }, userId: administrator });
+
+test('a customer can cancel a paid order and recover its stock exactly once', async () => {
+  const { data: order } = await place(bag(2));
+  assert.equal(order.canCancel, true);
+  const results = await Promise.all(Array.from({ length: 5 }, () => cancel(order.id)));
+  assert.ok(results.every((result) => result.status === 200));
+  assert.ok(results.every((result) => result.data.status === 'cancelled' && !result.data.canCancel));
+  assert.equal(stock(), 5);
+  assert.equal((await request('/orders')).data[0].status, 'cancelled');
+});
+
+test('processing orders remain cancellable and restore every line', async () => {
+  const { data: order } = await place({ items: [{ variantId, qty: 2 }, { variantId: secondVariantId, qty: 3 }], shipping });
+  assert.equal((await advance(order.id, 'processing')).status, 200);
+  assert.equal((await cancel(order.id)).status, 200);
+  assert.equal(stock(), 5);
+  assert.equal(stock(secondVariantId), 3);
+});
+
+test('a customer cannot cancel another customer order or use staff status changes', async () => {
+  const { data: order } = await place();
+  assert.equal((await cancel(order.id, { userId: otherCustomer })).status, 404);
+  assert.equal((await cancel(order.id, { userId: null })).status, 401);
+  assert.equal((await cancel(999999)).status, 404);
+  assert.equal((await cancel('invalid')).status, 404);
+  assert.equal((await request(`/admin/orders/${order.id}`, { method: 'PATCH', body: { status: 'cancelled' } })).status, 403);
+  assert.equal(stock(), 4);
+  assert.equal((await request(`/orders/${order.id}`)).data.status, 'paid');
+});
+
+test('shipped and delivered orders reject both customer and staff cancellation', async () => {
+  const { data: order } = await place();
+  await advance(order.id, 'processing');
+  await advance(order.id, 'shipped');
+  assert.equal((await request(`/orders/${order.id}`)).data.canCancel, false);
+  assert.equal((await cancel(order.id)).status, 409);
+  assert.equal((await advance(order.id, 'cancelled')).status, 409);
+  assert.equal((await advance(order.id, 'delivered')).status, 200);
+  assert.equal((await cancel(order.id)).status, 409);
+  assert.equal((await advance(order.id, 'cancelled')).status, 409);
+  assert.equal((await advance(order.id, 'paid')).status, 409);
+  assert.equal(stock(), 4);
+});
+
+test('staff can advance fulfillment without skipping or reversing steps', async () => {
+  const { data: order } = await place();
+  assert.equal((await advance(order.id, 'shipped')).status, 409);
+  assert.equal((await advance(order.id, 'delivered')).status, 409);
+  assert.equal((await advance(order.id, 'unknown')).status, 400);
+  const processing = await advance(order.id, 'processing');
+  assert.deepEqual(processing.data.allowedStatuses, ['processing', 'shipped', 'cancelled']);
+  assert.equal((await advance(order.id, 'paid')).status, 409);
+  assert.equal((await advance(order.id, 'shipped')).status, 200);
+  assert.equal((await advance(order.id, 'processing')).status, 409);
+  const delivered = await advance(order.id, 'delivered');
+  assert.deepEqual(delivered.data.allowedStatuses, ['delivered']);
+  assert.equal((await advance(order.id, 'delivered')).status, 200);
+  assert.equal(stock(), 4);
+});
+
+test('staff cancellation and reopening adjust inventory once per transition', async () => {
+  const { data: order } = await place(bag(2));
+  assert.equal((await advance(order.id, 'cancelled')).status, 200);
+  assert.equal((await advance(order.id, 'cancelled')).status, 200);
+  assert.equal(stock(), 5);
+  assert.equal((await advance(order.id, 'shipped')).status, 409);
+  assert.equal((await advance(order.id, 'processing')).status, 409);
+  const reopened = await advance(order.id, 'paid');
+  assert.equal(reopened.status, 200);
+  assert.deepEqual(reopened.data.allowedStatuses, ['paid', 'processing', 'cancelled']);
+  assert.equal(stock(), 3);
+  assert.equal((await advance(order.id, 'paid')).status, 200);
+  assert.equal(stock(), 3);
+});
+
+test('a failed multi-line reopen rolls back earlier inventory deductions', async () => {
+  const { data: order } = await place({ items: [{ variantId, qty: 2 }, { variantId: secondVariantId, qty: 3 }], shipping });
+  await cancel(order.id);
+  await place({ items: [{ variantId: secondVariantId, qty: 1 }], shipping }, { userId: otherCustomer });
+  assert.equal((await advance(order.id, 'paid')).status, 409);
+  assert.equal(stock(), 5);
+  assert.equal(stock(secondVariantId), 2);
+  assert.equal((await request(`/orders/${order.id}`)).data.status, 'cancelled');
+});
+
+test('checkout replay never revives a cancelled purchase', async () => {
+  const { data: order } = await place(bag(2), { requestKey: key });
+  await cancel(order.id);
+  const retry = await place(bag(2), { requestKey: key });
+  assert.equal(retry.status, 200);
+  assert.equal(retry.data.id, order.id);
+  assert.equal(retry.data.status, 'cancelled');
+  assert.equal(stock(), 5);
+  assert.equal(orderCount(), 1);
+});
+
+test('dispatch and cancellation racing leave one valid state and stock balance', async () => {
+  const { data: order } = await place(bag(2));
+  await advance(order.id, 'processing');
+  const results = await Promise.all([cancel(order.id), advance(order.id, 'shipped')]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  const saved = (await request(`/orders/${order.id}`)).data;
+  assert.ok(['shipped', 'cancelled'].includes(saved.status));
+  assert.equal(stock(), saved.status === 'cancelled' ? 5 : 3);
+});

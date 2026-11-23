@@ -7,11 +7,12 @@ import { requireAdmin } from '../auth.js';
 import { HttpError, str } from '../http.js';
 import { getSettings, updateSettings } from '../settings.js';
 import { listProducts, toProducts } from './products.js';
+import { ORDER_STATUSES, allowedOrderStatuses, changeOrderStatus } from '../orderStatus.js';
 
 export const UPLOAD_DIR = path.join(dataDir, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-export const ORDER_STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'cancelled'];
+export { ORDER_STATUSES };
 
 const router = Router();
 router.use(requireAdmin);
@@ -199,6 +200,7 @@ function adminOrder(row) {
   return {
     id: row.id,
     status: row.status,
+    allowedStatuses: allowedOrderStatuses(row.status),
     createdAt: row.created_at,
     subtotalCents: row.subtotal_cents,
     shippingCents: row.shipping_cents,
@@ -225,29 +227,10 @@ router.get('/orders/:id', (req, res) => {
   res.json(adminOrder(row));
 });
 
-// Cancelling puts the items back in stock; reviving a cancelled order takes them out again (if there is enough).
+// Status transitions and inventory adjustments are shared with customer cancellation.
 router.patch('/orders/:id', (req, res) => {
   const orderId = id(req);
-  const status = req.body?.status;
-  if (!ORDER_STATUSES.includes(status)) throw new HttpError(400, `Status must be one of: ${ORDER_STATUSES.join(', ')}.`);
-  transaction(() => {
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-    if (!order) throw new HttpError(404, 'Order not found.');
-    if (order.status === status) return;
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
-    if (status === 'cancelled') {
-      const restock = db.prepare('UPDATE variants SET stock = stock + ? WHERE id = ?');
-      for (const i of items) restock.run(i.qty, i.variant_id);
-    } else if (order.status === 'cancelled') {
-      const take = db.prepare('UPDATE variants SET stock = stock - ? WHERE id = ? AND stock >= ?');
-      for (const i of items) {
-        if (take.run(i.qty, i.variant_id, i.qty).changes === 0) {
-          throw new HttpError(409, `Not enough stock of "${i.name} (${i.color}, ${i.size})" to reopen this order.`);
-        }
-      }
-    }
-    db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, orderId);
-  });
+  changeOrderStatus(orderId, req.body?.status);
   res.json(adminOrder(db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).get(orderId)));
 });
 
