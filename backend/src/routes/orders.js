@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { createHash } from 'node:crypto';
 import { db, transaction } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, str } from '../http.js';
@@ -52,7 +53,10 @@ router.get('/:id', (req, res) => {
 // Payment is a local stand-in: any order that passes validation is marked "paid".
 router.post('/', (req, res) => {
   const body = req.body ?? {};
-  const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY_PER_ITEM } = getSettings();
+  const requestKey = req.get('Idempotency-Key');
+  if (requestKey !== undefined && !/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new HttpError(400, 'Idempotency-Key must be 16 to 128 letters, numbers, underscores or hyphens.');
+  }
   const shipping = {
     name: str(body.shipping?.name, { field: 'Full name', max: 100 }),
     address: str(body.shipping?.address, { field: 'Address', max: 200 }),
@@ -68,13 +72,28 @@ router.post('/', (req, res) => {
   for (const item of body.items) {
     const variantId = Number(item?.variantId);
     const qty = Number(item?.qty);
-    if (!Number.isInteger(variantId) || !Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_ITEM) {
-      throw new HttpError(400, `Quantity must be a whole number from 1 to ${MAX_QTY_PER_ITEM}.`);
+    if (!Number.isSafeInteger(variantId) || variantId < 1 || !Number.isSafeInteger(qty) || qty < 1 || !Number.isSafeInteger((wanted.get(variantId) ?? 0) + qty)) {
+      throw new HttpError(400, 'Variant IDs and quantities must be positive whole numbers.');
     }
     wanted.set(variantId, (wanted.get(variantId) ?? 0) + qty);
   }
 
+  const requestHash = createHash('sha256').update(JSON.stringify({
+    shipping,
+    items: [...wanted].sort(([a], [b]) => a - b),
+  })).digest('hex');
+  let replayed = false;
+
   const orderId = transaction(() => {
+    if (requestKey) {
+      const previous = db.prepare('SELECT request_hash, order_id FROM checkout_requests WHERE user_id = ? AND request_key = ?').get(req.userId, requestKey);
+      if (previous) {
+        if (previous.request_hash !== requestHash) throw new HttpError(409, 'This checkout was already used for a different bag or address. Review your orders before trying again.');
+        replayed = true;
+        return previous.order_id;
+      }
+    }
+    const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY_PER_ITEM } = getSettings();
     const getVariant = db.prepare(
       'SELECT v.*, p.name AS product_name, p.price_cents, p.active FROM variants v JOIN products p ON p.id = v.product_id WHERE v.id = ?',
     );
@@ -109,10 +128,15 @@ router.post('/', (req, res) => {
       insertItem.run(lastInsertRowid, v.product_id, v.id, v.product_name, v.color, v.color_hex, v.size, v.price_cents, qty);
       decrement.run(qty, v.id);
     }
+    if (requestKey) {
+      db.prepare('INSERT INTO checkout_requests (user_id, request_key, request_hash, order_id) VALUES (?, ?, ?, ?)')
+        .run(req.userId, requestKey, requestHash, lastInsertRowid);
+    }
     return Number(lastInsertRowid);
   });
 
-  res.status(201).json(loadOrder(orderId));
+  if (replayed) res.set('Idempotency-Replayed', 'true');
+  res.status(replayed ? 200 : 201).json(loadOrder(orderId));
 });
 
 export default router;

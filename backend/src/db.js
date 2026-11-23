@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+export const dataDir = process.env.THREADS_DATA_DIR
+  ? path.resolve(process.env.THREADS_DATA_DIR)
+  : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
 export const db = new DatabaseSync(path.join(dataDir, 'threads.db'));
@@ -76,6 +78,14 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_orders_user ON orders (user_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS checkout_requests (
+    user_id      INTEGER NOT NULL REFERENCES users (id),
+    request_key  TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    order_id     INTEGER NOT NULL UNIQUE REFERENCES orders (id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, request_key)
+  );
 
   -- Name, colour, size and price are copied onto the line so old orders never change.
   CREATE TABLE IF NOT EXISTS order_items (
