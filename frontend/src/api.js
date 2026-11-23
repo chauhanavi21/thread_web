@@ -55,12 +55,18 @@ export const api = {
   orders: () => request('/orders'),
   order: (id) => request(`/orders/${id}`),
   cancelOrder: (id) => request(`/orders/${id}/cancel`, { method: 'POST' }),
+  requestReturn: (id, body, key) => request(`/orders/${id}/returns`, { method: 'POST', body, headers: { 'Idempotency-Key': key } }),
+  cancelReturn: (id) => request(`/returns/${id}/cancel`, { method: 'POST' }),
   placeOrder: (body, key) => request('/orders', { method: 'POST', body, headers: key ? { 'Idempotency-Key': key } : {} }),
   site: () => request('/site'),
 };
 
 /** Everything under /api/admin. The server re-checks the admin role on every call. */
 export const admin = {
+  order: (id) => request(`/admin/orders/${id}`),
+  returns: (status) => request(`/admin/returns${status ? `?status=${status}` : ''}`),
+  createReturn: (body, key) => request('/admin/returns', { method: 'POST', body, headers: { 'Idempotency-Key': key } }),
+  returnAction: (id, body) => request(`/admin/returns/${id}/actions`, { method: 'POST', body }),
   stats: () => request('/admin/stats'),
   products: () => request('/admin/products'),
   product: (id) => request(`/admin/products/${id}`),

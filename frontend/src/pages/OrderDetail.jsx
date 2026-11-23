@@ -5,6 +5,7 @@ import ProductImage from '../components/ProductImage.jsx';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
 import { formatDate } from './Orders.jsx';
+import Returns from '../components/Returns.jsx';
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -118,6 +119,7 @@ export default function OrderDetail() {
           </aside>
         </div>
       </div>
+      <Returns key={o.id} order={o} onSaved={() => setVersion((value) => value + 1)} />
     </>
   );
 }

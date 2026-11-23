@@ -1,13 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { getAdminToken } from './helpers.js';
 
 const shipping = { name: 'Browser Customer', address: '12 Example Street', city: 'Sample City', zip: '12345' };
 
 async function prepareCheckout(page, request) {
   const suffix = randomUUID();
-  const login = await request.post('/api/auth/login', { data: { email: 'browser-admin@example.test', password: 'BrowserTestsOnly!2026' } });
-  expect(login.ok()).toBeTruthy();
-  const { token: adminToken } = await login.json();
+  const adminToken = await getAdminToken(request);
   const created = await request.post('/api/admin/products', {
     headers: { Authorization: `Bearer ${adminToken}` },
     data: {

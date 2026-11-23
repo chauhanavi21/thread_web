@@ -6,6 +6,7 @@ const LINKS = [
   ['/admin', 'Dashboard', true],
   ['/admin/products', 'Products'],
   ['/admin/orders', 'Orders'],
+  ['/admin/returns', 'Returns & exchanges'],
   ['/admin/customers', 'Customers'],
   ['/admin/categories', 'Categories'],
   ['/admin/settings', 'Site settings'],
