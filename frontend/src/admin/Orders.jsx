@@ -8,17 +8,23 @@ export default function Orders() {
   const [filter, setFilter] = useState('');
   const [version, setVersion] = useState(0);
   const [open, setOpen] = useState(null);
+  const [pending, setPending] = useState(null);
   const { data, error, loading } = useAsync(() => admin.orders(filter), [filter, version]);
   const [flash, flashNode] = useFlash();
 
   const setStatus = async (order, status) => {
+    if (pending !== null || status === order.status) return;
     if (status === 'cancelled' && !window.confirm(`Cancel order #${order.id}? The items go back into stock.`)) return;
+    setPending(order.id);
     try {
       await admin.setOrderStatus(order.id, status);
       flash(`Order #${order.id} is now ${status}.`);
       setVersion((v) => v + 1);
     } catch (err) {
       flash(err.message, true);
+      if (err.status === 409) setVersion((v) => v + 1);
+    } finally {
+      setPending(null);
     }
   };
 
@@ -50,10 +56,11 @@ export default function Orders() {
                   <select
                     className={`rounded-full border-0 py-1.5 pl-3 pr-8 text-xs font-medium capitalize ${statusClass(o.status)}`}
                     value={o.status}
+                    disabled={pending !== null || o.allowedStatuses.length < 2}
                     onChange={(e) => setStatus(o, e.target.value)}
                     aria-label={`Status of order ${o.id}`}
                   >
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {o.allowedStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 {isOpen && (

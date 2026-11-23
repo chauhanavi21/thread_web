@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { db, dataDir, transaction } from './db.js';
+import { db, transaction } from './db.js';
 import { C, LAUNCH_PRODUCTS } from './seedData.js';
 import { BATCH_2_PRODUCTS } from './seedBatch2.js';
 

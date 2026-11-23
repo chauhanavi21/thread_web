@@ -4,6 +4,7 @@ import { db, transaction } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, str } from '../http.js';
 import { getSettings } from '../settings.js';
+import { canCancelOrder, changeOrderStatus } from '../orderStatus.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -16,6 +17,7 @@ function loadOrder(orderId) {
   return {
     id: order.id,
     status: order.status,
+    canCancel: canCancelOrder(order.status),
     createdAt: order.created_at,
     subtotalCents: order.subtotal_cents,
     shippingCents: order.shipping_cents,
@@ -46,6 +48,12 @@ router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT id FROM orders WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.userId);
   if (!row) throw new HttpError(404, 'Order not found.');
   res.json(loadOrder(row.id));
+});
+
+router.post('/:id/cancel', (req, res) => {
+  const orderId = Number(req.params.id);
+  changeOrderStatus(orderId, 'cancelled', req.userId);
+  res.json(loadOrder(orderId));
 });
 
 // POST /api/orders   { items: [{ variantId, qty }], shipping: { name, address, city, zip } }
