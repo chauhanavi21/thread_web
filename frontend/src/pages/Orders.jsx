@@ -29,6 +29,7 @@ export default function Orders() {
           <li key={o.id}>
             <Link
               to={`/orders/${o.id}`}
+              aria-label={`View order #${o.id}`}
               className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-brand-200 bg-white p-4 transition hover:border-brand-400 sm:px-6"
             >
               <div className="-space-x-3 flex">

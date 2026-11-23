@@ -92,3 +92,55 @@ test('a stock conflict keeps the bag and gives a route back to review it', async
   await expect(page.getByRole('heading', { name: 'Your bag', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Browser Test Tee', exact: true })).toBeVisible();
 });
+
+test('customers can keep or cancel an order, with its status and stock saved', async ({ page, request }) => {
+  const { product, token } = await prepareCheckout(page, request);
+  await page.getByRole('button', { name: 'Place order', exact: true }).click();
+  await expect(page).toHaveURL(/\/orders\/\d+$/);
+  const orderURL = page.url();
+  await page.getByRole('button', { name: 'Cancel order', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep order', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cancel order', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Yes, cancel order', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancel order', exact: true }).click();
+  await page.getByRole('button', { name: 'Yes, cancel order', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('This order has been cancelled.');
+  await expect(page.getByRole('button', { name: 'Cancel order', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Thank you! Your order has been placed.')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('status')).toContainText('This order has been cancelled.');
+  const updated = await (await request.get(`/api/products/${product.slug}`)).json();
+  expect(updated.variants[0].stock).toBe(5);
+  const orders = await (await request.get('/api/orders', { headers: { Authorization: `Bearer ${token}` } })).json();
+  expect(orders).toHaveLength(1);
+  expect(orders[0].status).toBe('cancelled');
+  await page.goto('/orders');
+  await page.getByRole('link', { name: `View order #${orders[0].id}`, exact: true }).click();
+  await expect(page).toHaveURL(orderURL);
+});
+
+test('dispatch during cancellation shows the current state and prevents restocking', async ({ page, request }) => {
+  const { product, adminToken } = await prepareCheckout(page, request);
+  await page.getByRole('button', { name: 'Place order', exact: true }).click();
+  await expect(page).toHaveURL(/\/orders\/\d+$/);
+  const orderId = page.url().split('/').at(-1);
+  await page.getByRole('button', { name: 'Cancel order', exact: true }).click();
+  const headers = { Authorization: `Bearer ${adminToken}` };
+  expect((await request.patch(`/api/admin/orders/${orderId}`, { headers, data: { status: 'processing' } })).status()).toBe(200);
+  expect((await request.patch(`/api/admin/orders/${orderId}`, { headers, data: { status: 'shipped' } })).status()).toBe(200);
+  await page.getByRole('button', { name: 'Yes, cancel order', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('An order that is shipped cannot be changed to cancelled.');
+  await expect(page.getByRole('button', { name: 'Cancel order', exact: true })).toHaveCount(0);
+  await expect(page.locator('.pill')).toHaveText('shipped');
+  const updated = await (await request.get(`/api/products/${product.slug}`)).json();
+  expect(updated.variants[0].stock).toBe(4);
+
+  // The staff selector offers only the server's legal next step.
+  await page.evaluate((token) => localStorage.setItem('threads.token', token), adminToken);
+  await page.goto('/admin/orders');
+  const status = page.getByRole('combobox', { name: `Status of order ${orderId}`, exact: true });
+  await expect(status.locator('option')).toHaveText(['shipped', 'delivered']);
+  await status.selectOption('delivered');
+  await expect(page.getByText(`Order #${orderId} is now delivered.`)).toBeVisible();
+  await expect(page.getByRole('combobox', { name: `Status of order ${orderId}`, exact: true })).toBeDisabled();
+});

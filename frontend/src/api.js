@@ -54,6 +54,7 @@ export const api = {
   me: () => request('/auth/me'),
   orders: () => request('/orders'),
   order: (id) => request(`/orders/${id}`),
+  cancelOrder: (id) => request(`/orders/${id}/cancel`, { method: 'POST' }),
   placeOrder: (body, key) => request('/orders', { method: 'POST', body, headers: key ? { 'Idempotency-Key': key } : {} }),
   site: () => request('/site'),
 };
