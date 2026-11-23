@@ -28,8 +28,8 @@ export default function AdminLayout() {
   if (!isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[210px_1fr] lg:gap-10">
-      <aside>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-10">
+      <aside className="min-w-0">
         <p className="eyebrow mb-3 hidden lg:block">Admin</p>
         <nav className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:px-0" aria-label="Admin">
           {LINKS.map(([to, label, end]) => <NavLink key={to} to={to} end={end} className={linkClass}>{label}</NavLink>)}

@@ -25,6 +25,7 @@ test('a customer exchanges a size and staff inspect a subsequent damaged return'
   const exchange = saved.returnCases[0];
 
   await pageAccount(page, adminToken, '/admin/returns');
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   let card = page.getByRole('article', { name: `Return case ${exchange.id}`, exact: true });
   await card.getByRole('button', { name: 'Approve exchange', exact: true }).click();
   await card.getByRole('combobox', { name: 'Inspection for Boutique Size Tee (M)', exact: true }).selectOption('resellable');
