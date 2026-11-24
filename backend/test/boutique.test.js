@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 const temporaryData = mkdtempSync(path.join(tmpdir(), 'threads-boutique-'));
 process.env.THREADS_DATA_DIR = temporaryData;
@@ -11,6 +12,7 @@ process.env.JWT_SECRET = 'threads-boutique-tests-only';
 const { db } = await import('../src/db.js');
 const { app } = await import('../src/app.js');
 const { signToken } = await import('../src/auth.js');
+const { expirePickupReservations } = await import('../src/pickup.js');
 let server, baseURL, customer, otherCustomer, staff, productId, medium, large;
 const shipping = { name: 'Boutique Customer', address: '12 Example Street', city: 'Sample City', zip: '12345' };
 
@@ -293,4 +295,180 @@ test('an inventory stream reports committed stock changes and can be closed', as
   assert.ok(JSON.parse(changed.match(/data: (.+)/)[1]).version > initialVersion);
   await reader.cancel();
   controller.abort();
+});
+
+const reservePickup = (overrides = {}, options = {}) => request('/orders', {
+  method: 'POST', key: randomUUID(),
+  body: { fulfillment: 'pickup', pickup: { name: 'Boutique Customer', contact: 'customer@example.test' }, items: [{ variantId: medium, qty: 2 }], ...overrides }, ...options,
+});
+const readyPickup = (id) => request(`/admin/orders/${id}`, { method: 'PATCH', body: { status: 'ready' }, userId: staff });
+const collect = (id, cashReceivedCents = 6000, options = {}) => request(`/admin/pickups/${id}/collect`, { method: 'POST', body: { cashReceivedCents }, userId: staff, ...options });
+
+test('pickup reserves shared stock with no shipping charge and remains unpaid until collection', async () => {
+  const before = Date.now();
+  const result = await reservePickup();
+  assert.equal(result.status, 201);
+  assert.equal(result.data.status, 'reserved');
+  assert.equal(result.data.fulfillment, 'pickup');
+  assert.equal(result.data.paymentStatus, 'unpaid');
+  assert.equal(result.data.shippingCents, 0);
+  assert.equal(result.data.totalCents, 5000);
+  assert.equal(result.data.canCancel, true);
+  assert.equal(result.data.items[0].returnableQty, 0);
+  assert.ok(Date.parse(result.data.pickup.expiresAt) >= before + 24 * 3600000);
+  assert.ok(Date.parse(result.data.pickup.expiresAt) <= Date.now() + 24 * 3600000);
+  assert.equal(stock(medium), 3);
+  assert.equal((await request('/admin/stats', { userId: staff })).data.revenueCents, 0);
+  assert.equal((await request('/admin/users', { userId: staff })).data.find((user) => user.id === customer).spentCents, 0);
+});
+
+test('staff mark a pickup ready and record cash at collection without deducting stock twice', async () => {
+  const order = (await reservePickup()).data;
+  assert.equal((await collect(order.id)).status, 409);
+  const ready = await readyPickup(order.id);
+  assert.equal(ready.status, 200);
+  assert.deepEqual(ready.data.allowedStatuses, ['ready', 'cancelled']);
+  assert.equal((await collect(order.id, 4999)).status, 400);
+  const collected = await collect(order.id);
+  assert.equal(collected.status, 200);
+  assert.equal(collected.data.status, 'collected');
+  assert.equal(collected.data.paymentStatus, 'paid');
+  assert.equal(collected.data.changeCents, 1000);
+  assert.equal(collected.data.canCancel, false);
+  assert.equal(collected.data.items[0].returnableQty, 2);
+  assert.equal(stock(medium), 3);
+  assert.equal((await request('/admin/stats', { userId: staff })).data.revenueCents, 5000);
+});
+
+test('collection retries preserve one receipt and a generic status update cannot skip cash recording', async () => {
+  const order = (await reservePickup()).data;
+  await readyPickup(order.id);
+  assert.equal((await request(`/admin/orders/${order.id}`, { method: 'PATCH', body: { status: 'collected' }, userId: staff })).status, 409);
+  assert.equal((await request(`/admin/orders/${order.id}`, { method: 'PATCH', body: { status: 'paid' }, userId: staff })).status, 409);
+  const results = await Promise.all([collect(order.id), collect(order.id)]);
+  assert.ok(results.every((result) => result.status === 200));
+  assert.equal((await collect(order.id, 7000)).status, 409);
+  assert.equal(stock(medium), 3);
+  assert.equal((await request('/admin/stats', { userId: staff })).data.revenueCents, 5000);
+});
+
+test('pickup expiration releases a hold at the exact deadline once', async () => {
+  const order = (await reservePickup()).data;
+  const expires = Date.parse(order.pickup.expiresAt);
+  assert.equal(expirePickupReservations(new Date(expires - 1)), 0);
+  assert.equal(stock(medium), 3);
+  assert.equal(expirePickupReservations(new Date(expires)), 1);
+  assert.equal(expirePickupReservations(new Date(expires + 1)), 0);
+  assert.equal(stock(medium), 5);
+  const saved = (await request(`/orders/${order.id}`)).data;
+  assert.equal(saved.status, 'expired');
+  assert.equal(saved.paymentStatus, 'unpaid');
+  assert.equal(saved.canCancel, false);
+  assert.equal((await collect(order.id)).status, 409);
+});
+
+test('ordinary reads expire overdue holds before displaying or selling stock', async () => {
+  const order = (await reservePickup()).data;
+  db.prepare('UPDATE orders SET pickup_expires_at = ? WHERE id = ?').run('2000-01-01T00:00:00.000Z', order.id);
+  const product = await request('/products/boutique-tee');
+  assert.equal(product.data.variants.find((variant) => variant.id === medium).stock, 5);
+  assert.equal((await request(`/orders/${order.id}`)).data.status, 'expired');
+  assert.equal((await counterSale()).status, 201);
+  assert.equal(stock(medium), 4);
+});
+
+test('cancelling reserved and ready pickups releases stock once and they cannot reopen as paid', async () => {
+  for (const ready of [false, true]) {
+    const order = (await reservePickup()).data;
+    if (ready) await readyPickup(order.id);
+    assert.equal((await request(`/orders/${order.id}/cancel`, { method: 'POST', userId: otherCustomer })).status, 404);
+    assert.equal((await request(`/orders/${order.id}/cancel`, { method: 'POST' })).status, 200);
+    assert.equal((await request(`/orders/${order.id}/cancel`, { method: 'POST' })).status, 200);
+    assert.equal((await request(`/admin/orders/${order.id}`, { method: 'PATCH', body: { status: 'paid' }, userId: staff })).status, 409);
+    assert.equal(stock(medium), 5);
+  }
+});
+
+test('an expired pickup checkout retry returns the expired order without reserving stock again', async () => {
+  const key = randomUUID();
+  const order = (await reservePickup({}, { key })).data;
+  expirePickupReservations(new Date(order.pickup.expiresAt));
+  const replay = await reservePickup({}, { key });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.data.id, order.id);
+  assert.equal(replay.data.status, 'expired');
+  assert.equal(stock(medium), 5);
+});
+
+test('pickup, online checkout and counter sales cannot reserve the same last unit', async () => {
+  db.prepare('UPDATE variants SET stock = 1 WHERE id = ?').run(medium);
+  const results = await Promise.all([
+    reservePickup({ items: [{ variantId: medium, qty: 1 }] }),
+    counterSale(),
+    request('/orders', { method: 'POST', body: { items: [{ variantId: medium, qty: 1 }], shipping } }),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [201, 409, 409]);
+  assert.equal(stock(medium), 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 1);
+});
+
+test('pickup settings are snapshotted and disabling new holds preserves existing collection', async () => {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('pickupAddress', JSON.stringify('Fictional boutique A'));
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('pickupHoldHours', '1');
+  const order = (await reservePickup()).data;
+  assert.equal(order.pickup.location, 'Fictional boutique A');
+  assert.equal((await request('/admin/settings', { method: 'PUT', body: { pickupEnabled: false, pickupHoldHours: 168, pickupAddress: 'Fictional boutique B' }, userId: staff })).status, 200);
+  assert.equal((await reservePickup()).status, 409);
+  const saved = (await request(`/orders/${order.id}`)).data;
+  assert.equal(saved.pickup.location, 'Fictional boutique A');
+  assert.equal(saved.pickup.expiresAt, order.pickup.expiresAt);
+  await readyPickup(order.id);
+  assert.equal((await collect(order.id)).status, 200);
+});
+
+test('collected pickups enter the same return and refund workflow', async () => {
+  const order = (await reservePickup()).data;
+  await readyPickup(order.id);
+  await collect(order.id);
+  const completed = (await request(`/orders/${order.id}`)).data;
+  const returned = (await startReturn(completed, returnBody(completed, 'return', 2))).data;
+  await act(returned.id, 'approve');
+  await act(returned.id, 'complete', inspect(returned));
+  assert.equal(stock(medium), 5);
+  assert.equal((await request('/admin/stats', { userId: staff })).data.revenueCents, 0);
+});
+
+test('pickup contact data and staff collection are protected by ownership and role checks', async () => {
+  const order = (await reservePickup()).data;
+  assert.equal((await request(`/orders/${order.id}`, { userId: otherCustomer })).status, 404);
+  assert.equal((await request('/admin/pickups')).status, 403);
+  assert.equal((await collect(order.id, 6000, { userId: customer })).status, 403);
+  assert.equal((await request('/admin/pickups', { userId: staff })).data[0].pickup.contact, 'customer@example.test');
+  assert.equal((await reservePickup({ pickup: { name: 'Customer', contact: '' } })).status, 400);
+});
+
+test('a new server process recovers and expires persisted pickup deadlines', async () => {
+  const order = (await reservePickup()).data;
+  db.prepare('UPDATE orders SET pickup_expires_at = ? WHERE id = ?').run('2000-01-01T00:00:00.000Z', order.id);
+  const recovered = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { expirePickupReservations } from './src/pickup.js';
+    import { db } from './src/db.js';
+    console.log(expirePickupReservations());
+    db.close();
+  `], { cwd: new URL('../', import.meta.url), env: process.env, encoding: 'utf8', timeout: 15000 });
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.equal(recovered.stdout.trim(), '1');
+  assert.equal(stock(medium), 5);
+  assert.equal((await request(`/orders/${order.id}`)).data.status, 'expired');
+});
+
+test('removing staff access also prevents counter receipt and return access through customer routes', async () => {
+  const order = (await counterSale()).data;
+  const returnCase = (await request('/admin/returns', { method: 'POST', body: { orderId: order.id, ...returnBody(order) }, userId: staff })).data;
+  const manager = Number(db.prepare("INSERT INTO users (name, email, password_hash, role) VALUES ('Manager', 'manager@example.test', 'unused', 'admin')").run().lastInsertRowid);
+  assert.equal((await request(`/admin/users/${staff}`, { method: 'PATCH', body: { role: 'customer' }, userId: manager })).status, 200);
+  assert.equal((await request(`/admin/counter-sales/${order.id}`, { userId: staff })).status, 403);
+  assert.equal((await request(`/orders/${order.id}`, { userId: staff })).status, 404);
+  assert.equal((await request(`/orders/${order.id}/returns`, { method: 'POST', body: returnBody(order), userId: staff })).status, 404);
+  assert.equal((await request(`/returns/${returnCase.id}/cancel`, { method: 'POST', userId: staff })).status, 404);
 });

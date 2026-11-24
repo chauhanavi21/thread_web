@@ -17,6 +17,10 @@ export function loadOrder(orderId) {
     paymentStatus: order.payment_status,
     cashReceivedCents: order.cash_received_cents,
     changeCents: order.cash_received_cents === null ? null : order.cash_received_cents - order.total_cents,
+    pickup: order.fulfillment === 'pickup' ? {
+      contact: order.pickup_contact, expiresAt: order.pickup_expires_at,
+      location: order.pickup_location, instructions: order.pickup_instructions,
+    } : null,
     canCancel: order.channel === 'online' && canCancelOrder(order.status),
     createdAt: order.created_at,
     subtotalCents: order.subtotal_cents,

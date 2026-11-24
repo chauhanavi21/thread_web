@@ -146,6 +146,11 @@ addColumn('orders', 'payment_method', "TEXT NOT NULL DEFAULT 'demo' CHECK (payme
 addColumn('orders', 'payment_status', "TEXT NOT NULL DEFAULT 'paid' CHECK (payment_status IN ('paid', 'unpaid'))");
 addColumn('orders', 'cash_received_cents', 'INTEGER CHECK (cash_received_cents >= 0)');
 addColumn('orders', 'created_by', 'INTEGER REFERENCES users(id)');
+addColumn('orders', 'pickup_contact', 'TEXT');
+addColumn('orders', 'pickup_expires_at', 'TEXT');
+addColumn('orders', 'pickup_location', 'TEXT');
+addColumn('orders', 'pickup_instructions', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_orders_pickup_expiry ON orders(fulfillment, status, pickup_expires_at)');
 // Historical deliveries did not record a completion time; retain their original
 // creation time as the conservative start of the return window.
 db.exec("UPDATE orders SET completed_at = created_at WHERE status = 'delivered' AND completed_at IS NULL");
