@@ -1,5 +1,18 @@
 # Boutique workflows
 
+## Click and collect
+
+1. Choose **Collect in store — pay at pickup** during checkout. Enter the collecting customer's name and contact. The order starts **reserved/unpaid**, charges no shipping, and holds the same stock used by the counter and online shop.
+2. Staff find it in **Admin → Click & collect** and choose **Mark ready for pickup** after preparing the items. The customer's order page updates while open. Contact is stored for staff; no email or SMS is sent automatically.
+3. At collection, staff check the order number, receive cash and hand over the items, then choose **Record payment & collection**. The order becomes **collected/paid**, records cash/change and starts its return window. Stock is not deducted a second time.
+4. Customers or staff can cancel a reserved/ready unpaid hold. Uncollected holds become **expired**, releasing stock once. A cancelled or expired reservation cannot reopen as a paid order; the customer creates a new reservation if needed.
+
+The default hold is **24 elapsed hours from reservation, including preparation time**. Staff can set 1–168 hours, address, instructions and whether new pickup reservations are available in **Site settings**. Existing reservations retain their saved deadline and location; disabling new pickup reservations does not prevent existing ones being collected.
+
+Expiry runs at API startup, every 30 seconds while idle, and before answering API requests. A pickup cannot be collected at or after its deadline. Persisted deadlines survive a restart. Retrying an expired reservation checkout returns that original expired order without reserving stock again. Cash collection is idempotent for the same amount; conflicting repeat amounts are rejected.
+
+Unpaid holds are excluded from revenue, best-seller totals and customer spend. Collected pickups use the same receipt, return, inspection and refund rules as other completed purchases. Deadline checks use UTC timestamps; the browser displays them in its local time zone. The bundled pickup address is fictional demo data and can be replaced in Site settings.
+
 ## One inventory for online and counter sales
 
 Open **Admin → Counter sales**, search by product name, product slug, size or colour, and add the required variants. Enter quantities, an optional customer name, and cash received. **Record cash sale** saves the receipt, change due, staff attribution and original item prices. It records cash already handled by staff; no card reader or processor is contacted.
