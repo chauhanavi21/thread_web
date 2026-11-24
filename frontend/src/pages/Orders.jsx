@@ -3,14 +3,16 @@ import { api, money } from '../api.js';
 import ProductImage from '../components/ProductImage.jsx';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
+import { useInventoryVersion } from '../context/InventoryContext.jsx';
 
 export const formatDate = (iso) =>
   new Date(`${iso.replace(' ', 'T')}Z`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
 export default function Orders() {
-  const { data, error, loading } = useAsync(() => api.orders(), []);
+  const inventoryVersion = useInventoryVersion();
+  const { data, error, loading } = useAsync(() => api.orders(), [inventoryVersion]);
 
-  if (loading || error) return <Status loading={loading} error={error} />;
+  if ((loading && !data) || error) return <Status loading={loading && !data} error={error} />;
   if (data.length === 0) {
     return (
       <Status>
@@ -43,7 +45,7 @@ export default function Orders() {
                 <p className="font-semibold">Order #{o.id}</p>
                 <p className="text-sm text-brand-500">{formatDate(o.createdAt)} · {o.items.reduce((n, i) => n + i.qty, 0)} items</p>
               </div>
-              <span className="pill">{o.status}</span>
+              <span className="pill">{o.status === 'ready' ? 'Ready for pickup' : o.status}</span>
               <strong className="w-20 text-right">{money(o.totalCents)}</strong>
             </Link>
           </li>

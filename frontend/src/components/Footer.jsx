@@ -28,7 +28,7 @@ export default function Footer() {
         <div className="text-sm">
           <p className="eyebrow mb-2 text-brand-400">Help</p>
           <p className="py-1">Free shipping over {money(settings.freeShippingOverCents).replace('.00', '')}</p>
-          <p className="py-1">30-day returns</p>
+          <p className="py-1">{settings.returnWindowDays ?? 30}-day returns</p>
         </div>
       </div>
       <div className="border-t border-white/10">

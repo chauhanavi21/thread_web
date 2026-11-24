@@ -36,6 +36,7 @@ export default function SiteSettings() {
         flatShippingCents: Math.round(Number(flatShipping) * 100),
         maxQtyPerItem: Number(f.maxQtyPerItem),
         returnWindowDays: Number(f.returnWindowDays),
+        pickupHoldHours: Number(f.pickupHoldHours),
       });
       await refresh();
       flash('Saved. The storefront is updated.');
@@ -109,6 +110,14 @@ export default function SiteSettings() {
           </div>
           <p className="text-xs text-brand-500">Applied in the bag and enforced by the server when an order is placed. The text on the home page highlights is separate, so update it too if you change the free-shipping amount.</p>
           <Field label="Return window (days)" hint="Starts at delivery or collection. Applies to new return and exchange requests."><input className="input" type="number" min="1" max="90" required value={f.returnWindowDays} onChange={set('returnWindowDays')} /></Field>
+        </section>
+
+        <section className="panel space-y-4">
+          <h2 className="text-2xl">Click &amp; collect</h2>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.pickupEnabled} onChange={(e) => setF((value) => ({ ...value, pickupEnabled: e.target.checked }))} />Allow new pickup reservations</label>
+          <Field label="Pickup address"><textarea className="input" maxLength={500} required={f.pickupEnabled} value={f.pickupAddress} onChange={set('pickupAddress')} /></Field>
+          <Field label="Pickup instructions"><textarea className="input" maxLength={500} value={f.pickupInstructions} onChange={set('pickupInstructions')} /></Field>
+          <Field label="Pickup hold (hours)" hint="Elapsed time from reservation, including preparation. Existing reservations keep their saved deadline and address."><input className="input" type="number" min="1" max="168" required value={f.pickupHoldHours} onChange={set('pickupHoldHours')} /></Field>
         </section>
 
         <section className="panel space-y-4">

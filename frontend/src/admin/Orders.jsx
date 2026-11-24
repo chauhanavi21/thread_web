@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { admin, money } from '../api.js';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
@@ -76,8 +77,9 @@ export default function Orders() {
                       <li className="flex justify-between border-t border-brand-200 pt-2 text-brand-600"><span>Shipping</span><span>{o.shippingCents === 0 ? 'Free' : money(o.shippingCents)}</span></li>
                     </ul>
                     <address className="not-italic text-brand-600">
-                      <span className="eyebrow mb-1 block">Ship to</span>
+                      <span className="eyebrow mb-1 block">{o.fulfillment === 'pickup' ? 'Collecting customer' : o.channel === 'counter' ? 'Counter customer' : 'Ship to'}</span>
                       {o.shipping.name}<br />{o.shipping.address}<br />{o.shipping.city} {o.shipping.zip}
+                      {o.fulfillment === 'pickup' && <Link className="link-btn mt-2 block" to="/admin/pickups">Manage pickup and payment</Link>}
                     </address>
                   </div>
                 )}

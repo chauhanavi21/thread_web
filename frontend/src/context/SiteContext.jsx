@@ -18,6 +18,8 @@ const FALLBACK = {
     freeShippingOverCents: 10000,
     flatShippingCents: 699,
     maxQtyPerItem: 10,
+    pickupEnabled: false,
+    pickupHoldHours: 24,
   },
   heroProduct: null,
   bannerProduct: null,

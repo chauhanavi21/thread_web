@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { admin } from '../api.js';
 
-export const STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'cancelled'];
+export const STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'reserved', 'ready', 'collected', 'cancelled', 'expired'];
 
 export const statusClass = (s) =>
   ({

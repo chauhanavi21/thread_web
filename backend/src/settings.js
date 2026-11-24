@@ -26,6 +26,10 @@ const FIELDS = {
   flatShippingCents: { kind: 'int', min: 0, max: 100_000, default: 699 },
   maxQtyPerItem: { kind: 'int', min: 1, max: 100, default: 10 },
   returnWindowDays: { kind: 'int', min: 1, max: 90, default: 30 },
+  pickupEnabled: { kind: 'boolean', default: true },
+  pickupHoldHours: { kind: 'int', min: 1, max: 168, default: 24 },
+  pickupAddress: { kind: 'text', max: 500, default: 'Threads demo boutique, 12 Example Street, Sample City' },
+  pickupInstructions: { kind: 'text', max: 500, default: 'Wait for Ready for pickup in My orders. Bring your order number and pay cash at collection.' },
 };
 
 export function getSettings() {
@@ -44,6 +48,9 @@ export function getSettings() {
 function clean(key, value) {
   const f = FIELDS[key];
   switch (f.kind) {
+    case 'boolean':
+      if (typeof value !== 'boolean') throw new HttpError(400, `${key} must be true or false.`);
+      return value;
     case 'text': {
       if (typeof value !== 'string') throw new HttpError(400, `${key} must be text.`);
       const v = value.trim();

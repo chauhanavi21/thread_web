@@ -4,7 +4,7 @@ import { useCart } from '../context/CartContext.jsx';
 import ProductImage from '../components/ProductImage.jsx';
 import { Status } from '../components/Status.jsx';
 
-export function OrderSummary({ cart }) {
+export function OrderSummary({ cart, fulfillment = 'shipping' }) {
   const toFree = cart.freeShippingOverCents - cart.subtotalCents;
   const progress = Math.min(100, (cart.subtotalCents / cart.freeShippingOverCents) * 100);
   return (
@@ -13,12 +13,12 @@ export function OrderSummary({ cart }) {
       <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
         <dt className="text-brand-600">Subtotal</dt>
         <dd className="text-right">{money(cart.subtotalCents)}</dd>
-        <dt className="text-brand-600">Shipping</dt>
+        <dt className="text-brand-600">{fulfillment === 'pickup' ? 'Collection fee' : 'Shipping'}</dt>
         <dd className="text-right">{cart.shippingCents === 0 ? 'Free' : money(cart.shippingCents)}</dd>
         <dt className="mt-1 border-t border-brand-200 pt-3 text-base font-semibold">Total</dt>
         <dd className="mt-1 border-t border-brand-200 pt-3 text-right text-base font-semibold">{money(cart.totalCents)}</dd>
       </dl>
-      {cart.count > 0 && (
+      {cart.count > 0 && fulfillment !== 'pickup' && (
         <div className="mt-4">
           <div className="h-1.5 overflow-hidden  bg-brand-100">
             <div className="h-full  bg-brand-950 transition-all" style={{ width: `${progress}%` }} />

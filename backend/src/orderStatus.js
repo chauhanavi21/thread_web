@@ -1,5 +1,6 @@
 import { db, transaction } from './db.js';
 import { HttpError } from './http.js';
+import { expirePickupReservations } from './pickup.js';
 
 const TRANSITIONS = {
   paid: ['processing', 'cancelled'],
@@ -9,23 +10,30 @@ const TRANSITIONS = {
   cancelled: ['paid'],
 };
 
-export const ORDER_STATUSES = Object.keys(TRANSITIONS);
-export const canCancelOrder = (status) => status === 'paid' || status === 'processing';
-export const allowedOrderStatuses = (status) => [status, ...(TRANSITIONS[status] ?? [])];
+const PICKUP_TRANSITIONS = { reserved: ['ready', 'cancelled'], ready: ['cancelled'], collected: [], cancelled: [], expired: [] };
+export const ORDER_STATUSES = [...new Set([...Object.keys(TRANSITIONS), ...Object.keys(PICKUP_TRANSITIONS)])];
+export const canCancelOrder = (status) => ['paid', 'processing', 'reserved', 'ready'].includes(status);
+export function allowedOrderStatuses(order) {
+  const status = typeof order === 'string' ? order : order.status;
+  const rules = order.fulfillment === 'pickup' ? PICKUP_TRANSITIONS : TRANSITIONS;
+  return [status, ...(rules[status] ?? [])];
+}
 
 // Both staff and customer changes use one transaction and the same stock rules.
 // Passing a customer ID scopes the lookup, so foreign orders also return 404.
 export function changeOrderStatus(orderId, status, customerId) {
   if (!Number.isSafeInteger(orderId) || orderId < 1) throw new HttpError(404, 'Order not found.');
   if (!ORDER_STATUSES.includes(status)) throw new HttpError(400, `Status must be one of: ${ORDER_STATUSES.join(', ')}.`);
+  expirePickupReservations();
   return transaction(() => {
     const order = customerId === undefined
       ? db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
-      : db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, customerId);
+      : db.prepare("SELECT * FROM orders WHERE id = ? AND user_id = ? AND channel = 'online'").get(orderId, customerId);
     if (!order) throw new HttpError(404, 'Order not found.');
     if (customerId !== undefined && status !== 'cancelled') throw new HttpError(403, 'Customers may only cancel their orders.');
     if (order.status === status) return;
-    if (!TRANSITIONS[order.status]?.includes(status)) {
+    const rules = order.fulfillment === 'pickup' ? PICKUP_TRANSITIONS : TRANSITIONS;
+    if (!rules[order.status]?.includes(status)) {
       throw new HttpError(409, `An order that is ${order.status} cannot be changed to ${status}.`);
     }
     const items = db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(orderId);

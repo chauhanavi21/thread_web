@@ -31,14 +31,14 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 router.get('/stats', (_req, res) => {
   const one = (sql) => db.prepare(sql).get();
-  const live = "status != 'cancelled'";
+  const live = "payment_status = 'paid' AND status NOT IN ('cancelled', 'expired')";
   res.json({
     products: one('SELECT COUNT(*) AS n FROM products').n,
     activeProducts: one('SELECT COUNT(*) AS n FROM products WHERE active = 1').n,
     customers: one("SELECT COUNT(*) AS n FROM users WHERE role = 'customer'").n,
     orders: one('SELECT COUNT(*) AS n FROM orders').n,
     revenueCents: one(`SELECT COALESCE(SUM(total_cents), 0) - (SELECT COALESCE(SUM(refund_cents), 0) FROM return_cases WHERE status = 'completed') AS n FROM orders WHERE ${live}`).n,
-    toFulfil: one("SELECT COUNT(*) AS n FROM orders WHERE status IN ('paid', 'processing')").n,
+    toFulfil: one("SELECT COUNT(*) AS n FROM orders WHERE status IN ('paid', 'processing', 'reserved', 'ready')").n,
     lowStock: db
       .prepare(
         `SELECT p.id AS productId, p.name, v.id AS variantId, v.color, v.size, v.stock
@@ -215,7 +215,7 @@ function adminOrder(row) {
     fulfillment: row.fulfillment,
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
-    allowedStatuses: allowedOrderStatuses(row.status),
+    allowedStatuses: allowedOrderStatuses(row),
     createdAt: row.created_at,
     subtotalCents: row.subtotal_cents,
     shippingCents: row.shipping_cents,
@@ -257,7 +257,7 @@ router.get('/users', (_req, res) => {
   const rows = db
     .prepare(
       `SELECT u.id, u.name, u.email, u.role, u.created_at AS createdAt,
-              COUNT(o.id) AS orderCount, COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total_cents -
+              COUNT(o.id) AS orderCount, COALESCE(SUM(CASE WHEN o.payment_status = 'paid' AND o.status NOT IN ('cancelled', 'expired') THEN o.total_cents -
                 (SELECT COALESCE(SUM(refund_cents), 0) FROM return_cases WHERE order_id = o.id AND status = 'completed') END), 0) AS spentCents
        FROM users u LEFT JOIN orders o ON o.user_id = u.id AND o.channel = 'online' GROUP BY u.id ORDER BY u.id`,
     )

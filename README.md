@@ -2,6 +2,8 @@
 
 A full-stack demo e-commerce site for clothing: **React** (Vite, Tailwind) on the front, **Node + Express** with a built-in **SQLite** database on the back. Everything runs on your own machine. There is nothing to sign up for and no paid service to connect.
 
+Threads also gives a small boutique one workspace for **online and counter inventory, size exchanges and returns, and click-and-collect reservations**. Cash payments and refunds are recorded by staff; card payments and carriers are not connected.
+
 ![Threads home page](docs/screenshots/home-desktop.jpg)
 
 The design follows Dribbble fashion e-commerce references: warm cream paper, near-black ink, one terracotta accent, large serif headings with italic highlights, rounded cards and real product photos. It is responsive from a 360px phone up to a wide desktop.
@@ -56,6 +58,7 @@ The design follows Dribbble fashion e-commerce references: warm cream paper, nea
 - "My orders" lists past orders with their items, totals and shipping address.
 - Cancel your own paid or processing order from its detail page, with a confirmation before releasing the items. Shipped and delivered orders cannot be cancelled.
 - Request a partial return or a different size/colour from a completed order. Staff approve exchanges, reserve replacement stock, inspect returned items, and record refunds or replacement handover. See [the boutique workflow guide](docs/BOUTIQUE_WORKFLOWS.md).
+- Choose **Collect in store** at checkout, reserve your items without a shipping fee, follow their ready status in My orders, and pay cash when collecting. You can cancel an unpaid hold; uncollected reservations expire automatically.
 
 **Run the shop (admin)**
 
@@ -67,6 +70,7 @@ Everything on the storefront is controlled from `/admin`, which only accounts wi
 - **Customers:** see who has signed up and what they have spent, promote someone to admin or demote them.
 - **Returns & exchanges:** open a case from a receipt, approve or reject requests, inspect each returned line, and keep damaged items out of sellable stock. Completed item refunds reduce dashboard revenue and customer spend; shipping is excluded.
 - **Counter sales:** find a product and its size/colour, record cash received, and save a receipt with change due. Counter and online purchases consume the same inventory; open storefront pages receive stock updates automatically. Counter receipts can be returned through the same inspection workflow.
+- **Click & collect:** prepare reservations, mark them ready, and record cash and collection together. Pickup address, instructions, availability and the default 24-hour hold are editable in Site settings. Unpaid reservations are excluded from revenue.
 - **Categories:** rename, reorder, describe and add pictures for the shop sections. They drive the menu, the footer, the shop filters and the home page tiles.
 - **Site settings:** the announcement bar, home page hero and banner copy, the highlights strip, the footer note, free-shipping threshold, flat shipping rate and the per-item quantity limit. The server uses the same shipping and quantity rules when it takes an order.
 
@@ -118,7 +122,7 @@ npm run build
 npm run test:e2e
 ```
 
-The API suite has **41 tests** against real HTTP requests and SQLite, including stock rollback, online/counter purchase races, cash and price validation, receipt retries, inventory notifications, returns, exchanges, and refund accounting. The **12 Chromium browser tests** cover desktop and phone viewports, including an exchange/damaged return and a counter sale that updates an already-open storefront. Phone checks use emulation, not a physical device.
+The API suite has **54 tests** against real HTTP requests and SQLite, including stock rollback, competing online/counter/pickup purchases, receipt retries, revoked staff access, inventory notifications, returns, inspection, refunds, exact-deadline expiry, and pickup recovery from a new server process. The **16 Chromium browser tests** cover desktop and phone viewports, including returns/exchanges, live counter inventory, pickup lost-response recovery, collection/payment across separate customer/staff browser sessions, configurable pickup policy and cancellation. Phone checks use emulation, not a physical device.
 
 Tests create temporary databases and use dedicated ports **4400** (API) and **5417** (site); they do not open the shop's database or reuse running servers. CI runs the API suite on Windows and Ubuntu, plus the production build and browser workflows on Ubuntu.
 
@@ -147,11 +151,16 @@ Browser (React)  ──/api──▶  Vite proxy  ──▶  Express API  ──
 ```
 backend/
   src/
-    index.js          Express app: CORS, JSON parsing, routes, error handler
+    index.js          Catalog/admin bootstrap, API listener and pickup expiry worker
+    app.js            Express app, routers and error handler
     db.js             SQLite schema (users, products, variants, orders, order_items) and a transaction helper
     seed.js           The 25 products, their colours, sizes and stock
     auth.js           JWT signing and the sign-in-required middleware
     http.js           HttpError, the rate limiter and input checks
+    returns.js        Return/exchange policy, replacement holds and inspection
+    pickup.js         Persisted hold expiry and cash-at-collection rules
+    orderItems.js     Shared server-priced inventory writes
+    orderView.js      Order/receipt snapshots and return eligibility
     routes/           products.js, auth.js, orders.js
 frontend/
   public/images/products/   One photo per product, named by its slug
@@ -196,7 +205,7 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | POST | `/api/orders/:id/cancel` | Cancel your own paid or processing order; repeated cancellation succeeds without another stock change. Returns `404` for another customer's order and `409` after dispatch |
 | POST | `/api/orders/:id/returns` | `{ kind: "return" or "exchange", reason, items: [{ orderItemId, qty, replacementVariantId? }] }`; optional `Idempotency-Key`. Only completed purchases within the return window qualify |
 | POST | `/api/returns/:id/cancel` | Withdraw your own open case and release any approved exchange hold |
-| POST | `/api/orders` | `{ items: [{ variantId, qty }], shipping: { name, address, city, zip } }`. Optional `Idempotency-Key` header (16–128 letters, digits, `_` or `-`): `201` for a new order, `200` for a matching replay, `409` for changed content or insufficient stock |
+| POST | `/api/orders` | Shipping: `{ items, shipping: { name, address, city, zip } }`. Pickup: `{ items, fulfillment: "pickup", pickup: { name, contact } }`. Optional `Idempotency-Key` header (16–128 letters, digits, `_` or `-`): `201` new, `200` matching replay, `409` changed content or insufficient stock |
 
 **Storefront settings**
 
@@ -217,6 +226,8 @@ Signing in as an admin takes you to `/admin`. More admins can be made from the C
 | POST | `/api/admin/returns/:id/actions` | `{ action: "approve", "reject" or "complete", inspections?: [{ itemId, restock }], confirmRefund? }`; completion requires every inspection and explicit refund acknowledgement |
 | GET, POST | `/api/admin/counter-sales` | Recent cash receipts; POST takes `{ items, customerName?, cashReceivedCents, expectedTotalCents }` and requires `Idempotency-Key`. No shipping fee; stale totals are rejected |
 | GET | `/api/admin/counter-sales/:id` | Staff-only saved counter receipt |
+| GET | `/api/admin/pickups?status=` | Pickup queue, with saved deadlines, location/contact and payment state |
+| POST | `/api/admin/pickups/:id/collect` | `{ cashReceivedCents }`; only a ready, unexpired pickup can become collected/paid. Repeating the same cash record is safe |
 | GET | `/api/admin/users` | Customers with order counts and spend |
 | PATCH, DELETE | `/api/admin/users/:id` | `{ role }`; you cannot demote yourself or the last admin |
 | GET, POST, PUT, DELETE | `/api/admin/categories[/:key]` | A category with products cannot be deleted |

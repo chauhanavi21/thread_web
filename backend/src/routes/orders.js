@@ -19,7 +19,7 @@ router.get('/', (req, res) => {
 });
 
 router.get('/:id', (req, res) => {
-  const row = db.prepare('SELECT id FROM orders WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.userId);
+  const row = db.prepare("SELECT id FROM orders WHERE id = ? AND user_id = ? AND channel = 'online'").get(Number(req.params.id), req.userId);
   if (!row) throw new HttpError(404, 'Order not found.');
   res.json(loadOrder(row.id));
 });
@@ -42,7 +42,12 @@ router.post('/', (req, res) => {
   const body = req.body ?? {};
   const requestKey = req.get('Idempotency-Key');
   validateRequestKey(requestKey);
-  const shipping = {
+  const fulfillment = body.fulfillment ?? 'shipping';
+  if (!['shipping', 'pickup'].includes(fulfillment)) throw new HttpError(400, 'Choose shipping or pickup.');
+  const pickupContact = fulfillment === 'pickup' ? str(body.pickup?.contact, { field: 'Pickup contact', min: 3, max: 120 }) : null;
+  const shipping = fulfillment === 'pickup' ? {
+    name: str(body.pickup?.name, { field: 'Pickup name', max: 100 }), address: '', city: '', zip: '',
+  } : {
     name: str(body.shipping?.name, { field: 'Full name', max: 100 }),
     address: str(body.shipping?.address, { field: 'Address', max: 200 }),
     city: str(body.shipping?.city, { field: 'City', max: 100 }),
@@ -66,6 +71,7 @@ router.post('/', (req, res) => {
   const requestHash = fingerprint({
     shipping,
     items: [...wanted].sort(([a], [b]) => a - b),
+    ...(fulfillment === 'pickup' ? { fulfillment, pickupContact } : {}),
   });
   let replayed = false;
 
@@ -78,18 +84,24 @@ router.post('/', (req, res) => {
         return previous.order_id;
       }
     }
-    const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY_PER_ITEM } = getSettings();
+    const settings = getSettings();
+    const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY_PER_ITEM } = settings;
+    if (fulfillment === 'pickup' && (!settings.pickupEnabled || !settings.pickupAddress.trim())) throw new HttpError(409, 'Pickup is not currently available. Choose shipping instead.');
     const lines = loadPricedLines(wanted, MAX_QTY_PER_ITEM);
 
     const subtotal = lines.reduce((sum, { v, qty }) => sum + v.price_cents * qty, 0);
-    const shippingCents = subtotal >= freeShippingOverCents ? 0 : flatShippingCents;
+    const shippingCents = fulfillment === 'pickup' || subtotal >= freeShippingOverCents ? 0 : flatShippingCents;
 
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO orders (user_id, subtotal_cents, shipping_cents, total_cents, ship_name, ship_address, ship_city, ship_zip)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO orders (user_id, subtotal_cents, shipping_cents, total_cents, ship_name, ship_address, ship_city, ship_zip,
+          fulfillment, status, payment_status, payment_method, pickup_contact, pickup_expires_at, pickup_location, pickup_instructions)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(req.userId, subtotal, shippingCents, subtotal + shippingCents, shipping.name, shipping.address, shipping.city, shipping.zip);
+      .run(req.userId, subtotal, shippingCents, subtotal + shippingCents, shipping.name, shipping.address, shipping.city, shipping.zip,
+        fulfillment, fulfillment === 'pickup' ? 'reserved' : 'paid', fulfillment === 'pickup' ? 'unpaid' : 'paid', fulfillment === 'pickup' ? 'cash' : 'demo',
+        pickupContact, fulfillment === 'pickup' ? new Date(Date.now() + settings.pickupHoldHours * 3600000).toISOString() : null,
+        fulfillment === 'pickup' ? settings.pickupAddress : null, fulfillment === 'pickup' ? settings.pickupInstructions : null);
 
     saveOrderItems(lastInsertRowid, lines);
 

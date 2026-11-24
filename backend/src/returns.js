@@ -65,7 +65,7 @@ export function createReturnCase(orderId, actorId, body, { staff = false, reques
   const caseId = transaction(() => {
     const order = staff
       ? db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
-      : db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, actorId);
+      : db.prepare("SELECT * FROM orders WHERE id = ? AND user_id = ? AND channel = 'online'").get(orderId, actorId);
     if (!order) throw new HttpError(404, 'Order not found.');
     if (requestKey) {
       const previous = db.prepare('SELECT id, request_hash FROM return_cases WHERE requested_by = ? AND request_key = ?').get(actorId, requestKey);
@@ -103,7 +103,7 @@ export function actOnReturnCase(caseId, action, body = {}, { customerId, now = n
   transaction(() => {
     const row = customerId === undefined
       ? db.prepare('SELECT * FROM return_cases WHERE id = ?').get(caseId)
-      : db.prepare('SELECT c.* FROM return_cases c JOIN orders o ON o.id = c.order_id WHERE c.id = ? AND o.user_id = ?').get(caseId, customerId);
+      : db.prepare("SELECT c.* FROM return_cases c JOIN orders o ON o.id = c.order_id WHERE c.id = ? AND o.user_id = ? AND o.channel = 'online'").get(caseId, customerId);
     if (!row) throw new HttpError(404, 'Return request not found.');
     if (customerId !== undefined && action !== 'cancel') throw new HttpError(403, 'Staff access required.');
     const target = { approve: 'approved', reject: 'rejected', complete: 'completed', cancel: 'cancelled' }[action];
