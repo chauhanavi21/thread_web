@@ -34,7 +34,7 @@ export default function ProductPage() {
     setShowSizeHint(false);
   }, [p?.id]);
 
-  if (loading && !p) return <Status loading />;
+  if (loading && (!p || p.slug !== slug)) return <Status loading />;
   if (error) return <Status error={error} />;
 
   const color = p.colors.find((c) => c.name === colorName) ?? p.colors[0];

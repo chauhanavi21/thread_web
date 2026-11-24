@@ -13,6 +13,14 @@ export function ReturnRequestForm({ order, staff = false, onSaved }) {
   const [error, setError] = useState('');
   const attempt = useRef(null);
   const item = eligible.find((entry) => entry.id === Number(itemId));
+  const eligibleIds = eligible.map((entry) => entry.id).join(',');
+
+  useEffect(() => {
+    if (!eligible.some((entry) => entry.id === Number(itemId))) {
+      setItemId(String(eligible[0]?.id ?? ''));
+      setQty('1');
+    }
+  }, [eligibleIds, itemId]);
 
   useEffect(() => {
     let active = true;
@@ -38,6 +46,9 @@ export function ReturnRequestForm({ order, staff = false, onSaved }) {
     try {
       if (staff) await admin.createReturn({ orderId: order.id, ...body }, attempt.current.key);
       else await api.requestReturn(order.id, body, attempt.current.key);
+      attempt.current = null;
+      setReason('');
+      setQty('1');
       onSaved();
     } catch (err) {
       setError(err.message);
@@ -74,7 +85,7 @@ export function ReturnRequestForm({ order, staff = false, onSaved }) {
       </fieldset>
       <p className="text-sm text-brand-600">{kind === 'exchange' ? 'The original purchase price is kept. Replacement stock is held after staff approves the exchange. Bring the original item to the shop for inspection and handover.' : `Item refund: ${money((item?.priceCents ?? 0) * Number(qty || 0))}. Shipping is not refunded. Bring the item to the shop for inspection.`}</p>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-      <button className="btn btn-sm" disabled={busy || (kind === 'exchange' && !product)}>{busy ? 'Saving…' : kind === 'exchange' ? 'Request exchange' : 'Request return'}</button>
+      <button className="btn btn-sm" disabled={busy || !item || (kind === 'exchange' && !product)}>{busy ? 'Saving…' : kind === 'exchange' ? 'Request exchange' : 'Request return'}</button>
     </form>
   );
 }

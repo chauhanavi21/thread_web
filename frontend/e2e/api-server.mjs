@@ -12,12 +12,15 @@ const { db } = await import('../../backend/src/db.js');
 const { app } = await import('../../backend/src/app.js');
 const { seedIfEmpty } = await import('../../backend/src/seed.js');
 const { ensureAdmin } = await import('../../backend/src/bootstrapAdmin.js');
+const { startPickupExpiry } = await import('../../backend/src/pickup.js');
 seedIfEmpty();
 await ensureAdmin();
+const stopExpiry = startPickupExpiry();
 const server = app.listen(4400, '127.0.0.1');
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
+    stopExpiry();
     server.close(() => {
       db.close();
       assert.ok(path.resolve(dataDirectory).startsWith(path.join(path.resolve(tmpdir()), 'threads-browser-')));

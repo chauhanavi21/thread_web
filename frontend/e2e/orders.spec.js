@@ -119,11 +119,21 @@ test('customers can keep or cancel an order, with its status and stock saved', a
 });
 
 test('dispatch during cancellation shows the current state and prevents restocking', async ({ page, request }) => {
-  const { product, adminToken } = await prepareCheckout(page, request);
+  const { product, adminToken, token } = await prepareCheckout(page, request);
   await page.getByRole('button', { name: 'Place order', exact: true }).click();
   await expect(page).toHaveURL(/\/orders\/\d+$/);
   const orderId = page.url().split('/').at(-1);
   await page.getByRole('button', { name: 'Cancel order', exact: true }).click();
+  // Keep the page stale while dispatch happens, as with a delayed connection.
+  // Live inventory normally refreshes this page before cancellation is clicked.
+  const snapshot = await (await request.get(`/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } })).json();
+  let delayRefresh = true;
+  await page.route(`**/api/orders/${orderId}`, (route) => delayRefresh ? route.fulfill({ json: snapshot }) : route.continue());
+  await page.route(`**/api/orders/${orderId}/cancel`, async (route) => {
+    const response = await route.fetch();
+    delayRefresh = false;
+    await route.fulfill({ response });
+  });
   const headers = { Authorization: `Bearer ${adminToken}` };
   expect((await request.patch(`/api/admin/orders/${orderId}`, { headers, data: { status: 'processing' } })).status()).toBe(200);
   expect((await request.patch(`/api/admin/orders/${orderId}`, { headers, data: { status: 'shipped' } })).status()).toBe(200);
