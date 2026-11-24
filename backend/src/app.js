@@ -7,6 +7,8 @@ import ordersRouter from './routes/orders.js';
 import siteRouter from './routes/site.js';
 import adminRouter, { UPLOAD_DIR } from './routes/admin.js';
 import { adminReturnsRouter, customerReturnsRouter } from './routes/returns.js';
+import counterSalesRouter from './routes/counterSales.js';
+import inventoryRouter from './routes/inventory.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -15,6 +17,8 @@ app.use(express.json({ limit: '50kb' }));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/products', productsRouter);
+app.use('/api/inventory', inventoryRouter);
+app.use('/api/admin/counter-sales', counterSalesRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/returns', customerReturnsRouter);

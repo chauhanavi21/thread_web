@@ -3,50 +3,18 @@ import { db, transaction } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { HttpError, str } from '../http.js';
 import { getSettings } from '../settings.js';
-import { canCancelOrder, changeOrderStatus } from '../orderStatus.js';
+import { changeOrderStatus } from '../orderStatus.js';
 import { fingerprint, validateRequestKey } from '../idempotency.js';
-import { createReturnCase, orderReturnCases, returnEligibility } from '../returns.js';
+import { createReturnCase } from '../returns.js';
+import { loadOrder } from '../orderView.js';
+import { loadPricedLines, saveOrderItems } from '../orderItems.js';
 
 const router = Router();
 router.use(requireAuth);
 
-function loadOrder(orderId) {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  const items = db
-    .prepare('SELECT oi.*, p.slug, p.type, p.image FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? ORDER BY oi.id')
-    .all(orderId);
-  const eligibility = returnEligibility(order);
-  return {
-    id: order.id,
-    status: order.status,
-    canCancel: canCancelOrder(order.status),
-    createdAt: order.created_at,
-    subtotalCents: order.subtotal_cents,
-    shippingCents: order.shipping_cents,
-    totalCents: order.total_cents,
-    returnWindowEndsAt: eligibility.returnWindowEndsAt,
-    returnCases: orderReturnCases(orderId),
-    shipping: { name: order.ship_name, address: order.ship_address, city: order.ship_city, zip: order.ship_zip },
-    items: items.map((i) => ({
-      id: i.id,
-      returnableQty: eligibility.availableQty(i),
-      productId: i.product_id,
-      variantId: i.variant_id,
-      slug: i.slug,
-      type: i.type,
-      image: i.image,
-      name: i.name,
-      color: i.color,
-      colorHex: i.color_hex,
-      size: i.size,
-      priceCents: i.price_cents,
-      qty: i.qty,
-    })),
-  };
-}
 
 router.get('/', (req, res) => {
-  const ids = db.prepare('SELECT id FROM orders WHERE user_id = ? ORDER BY id DESC').all(req.userId);
+  const ids = db.prepare("SELECT id FROM orders WHERE user_id = ? AND channel = 'online' ORDER BY id DESC").all(req.userId);
   res.json(ids.map(({ id }) => loadOrder(id)));
 });
 
@@ -111,20 +79,7 @@ router.post('/', (req, res) => {
       }
     }
     const { freeShippingOverCents, flatShippingCents, maxQtyPerItem: MAX_QTY_PER_ITEM } = getSettings();
-    const getVariant = db.prepare(
-      'SELECT v.*, p.name AS product_name, p.price_cents, p.active FROM variants v JOIN products p ON p.id = v.product_id WHERE v.id = ?',
-    );
-    const lines = [];
-    for (const [variantId, qty] of wanted) {
-      const v = getVariant.get(variantId);
-      if (!v || !v.active) throw new HttpError(400, 'One of the items in your bag is no longer available.');
-      const label = `${v.product_name} (${v.color}, ${v.size})`;
-      if (qty > MAX_QTY_PER_ITEM) throw new HttpError(400, `You can order at most ${MAX_QTY_PER_ITEM} of "${label}".`);
-      if (v.stock < qty) {
-        throw new HttpError(409, v.stock === 0 ? `"${label}" is out of stock.` : `Only ${v.stock} of "${label}" left in stock.`);
-      }
-      lines.push({ v, qty });
-    }
+    const lines = loadPricedLines(wanted, MAX_QTY_PER_ITEM);
 
     const subtotal = lines.reduce((sum, { v, qty }) => sum + v.price_cents * qty, 0);
     const shippingCents = subtotal >= freeShippingOverCents ? 0 : flatShippingCents;
@@ -136,15 +91,8 @@ router.post('/', (req, res) => {
       )
       .run(req.userId, subtotal, shippingCents, subtotal + shippingCents, shipping.name, shipping.address, shipping.city, shipping.zip);
 
-    const insertItem = db.prepare(
-      `INSERT INTO order_items (order_id, product_id, variant_id, name, color, color_hex, size, price_cents, qty)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    const decrement = db.prepare('UPDATE variants SET stock = stock - ? WHERE id = ?');
-    for (const { v, qty } of lines) {
-      insertItem.run(lastInsertRowid, v.product_id, v.id, v.product_name, v.color, v.color_hex, v.size, v.price_cents, qty);
-      decrement.run(qty, v.id);
-    }
+    saveOrderItems(lastInsertRowid, lines);
+
     if (requestKey) {
       db.prepare('INSERT INTO checkout_requests (user_id, request_key, request_hash, order_id) VALUES (?, ?, ?, ?)')
         .run(req.userId, requestKey, requestHash, lastInsertRowid);

@@ -3,6 +3,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const temporaryData = mkdtempSync(path.join(tmpdir(), 'threads-boutique-'));
 process.env.THREADS_DATA_DIR = temporaryData;
@@ -198,4 +199,98 @@ test('exchanges reject other products, the original variant, foreign lines and i
   const other = Number(db.prepare("INSERT INTO products (slug, name, category, type, description, price_cents) VALUES ('other', 'Other', 'men', 'jeans', 'Another test product', 1000)").run().lastInsertRowid);
   const variant = Number(db.prepare("INSERT INTO variants (product_id, color, color_hex, size, stock) VALUES (?, 'Ink', '#111111', 'M', 2)").run(other).lastInsertRowid);
   assert.equal((await startReturn(order, { ...body, items: [{ ...body.items[0], replacementVariantId: variant }] })).status, 400);
+});
+
+const counterSale = (overrides = {}, options = {}) => request('/admin/counter-sales', {
+  method: 'POST', userId: staff, key: randomUUID(),
+  body: { items: [{ variantId: medium, qty: 1 }], cashReceivedCents: 3000, expectedTotalCents: 2500, ...overrides }, ...options,
+});
+
+test('a counter cash receipt consumes the same inventory and records change without shipping', async () => {
+  const result = await counterSale();
+  assert.equal(result.status, 201);
+  assert.equal(result.data.channel, 'counter');
+  assert.equal(result.data.fulfillment, 'counter');
+  assert.equal(result.data.paymentMethod, 'cash');
+  assert.equal(result.data.paymentStatus, 'paid');
+  assert.equal(result.data.totalCents, 2500);
+  assert.equal(result.data.shippingCents, 0);
+  assert.equal(result.data.changeCents, 500);
+  assert.equal(result.data.items[0].returnableQty, 1);
+  assert.equal(result.data.canCancel, false);
+  assert.equal(stock(medium), 4);
+  const receipt = await request(`/admin/counter-sales/${result.data.id}`, { userId: staff });
+  assert.equal(receipt.data.shipping.name, 'Walk-in customer');
+  assert.deepEqual((await request('/orders', { userId: staff })).data, []);
+  const users = (await request('/admin/users', { userId: staff })).data;
+  assert.equal(users.find((user) => user.id === staff).spentCents, 0);
+});
+
+test('cash receipt retries return one receipt and preserve its original price snapshot', async () => {
+  const key = randomUUID();
+  const results = await Promise.all(Array.from({ length: 4 }, () => counterSale({}, { key })));
+  assert.equal(results.filter((result) => result.status === 201).length, 1);
+  assert.equal(results.filter((result) => result.status === 200).length, 3);
+  assert.equal(new Set(results.map((result) => result.data.id)).size, 1);
+  db.exec('UPDATE products SET price_cents = 9900');
+  assert.equal((await counterSale({}, { key })).data.items[0].priceCents, 2500);
+  assert.equal((await counterSale({ customerName: 'Different customer' }, { key })).status, 409);
+  assert.equal(stock(medium), 4);
+});
+
+test('counter recording rejects stale prices, insufficient cash and invalid quantities without taking stock', async () => {
+  assert.equal((await counterSale({ expectedTotalCents: 1 })).status, 409);
+  assert.equal((await counterSale({ cashReceivedCents: 2499 })).status, 400);
+  assert.equal((await counterSale({ items: [{ variantId: medium, qty: 1.5 }] })).status, 400);
+  assert.equal((await counterSale({}, { key: undefined })).status, 400);
+  assert.equal((await counterSale({ items: [{ variantId: medium, qty: 1 }, { variantId: large, qty: 4 }], expectedTotalCents: 12500, cashReceivedCents: 12500 })).status, 409);
+  assert.equal(stock(medium), 5);
+  assert.equal(stock(large), 3);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 0);
+});
+
+test('counter sales and receipts require staff access', async () => {
+  assert.equal((await counterSale({}, { userId: customer })).status, 403);
+  assert.equal((await request('/admin/counter-sales', { userId: customer })).status, 403);
+  assert.equal((await request('/admin/counter-sales', { userId: null })).status, 401);
+  const receipt = (await counterSale()).data;
+  assert.equal((await request(`/orders/${receipt.id}`)).status, 404);
+  assert.equal((await request(`/admin/counter-sales/${receipt.id}`, { userId: customer })).status, 403);
+});
+
+test('an online shopper and the counter cannot both buy the last unit', async () => {
+  db.prepare('UPDATE variants SET stock = 1 WHERE id = ?').run(medium);
+  const results = await Promise.all([
+    counterSale(),
+    request('/orders', { method: 'POST', body: { items: [{ variantId: medium, qty: 1 }], shipping } }),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [201, 409]);
+  assert.equal(stock(medium), 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 1);
+});
+
+test('a counter purchase can be returned from its receipt through the shared inspection workflow', async () => {
+  const order = (await counterSale()).data;
+  const created = await request('/admin/returns', { method: 'POST', body: { orderId: order.id, ...returnBody(order) }, userId: staff });
+  assert.equal(created.status, 201);
+  await act(created.data.id, 'approve');
+  await act(created.data.id, 'complete', inspect(created.data));
+  assert.equal(stock(medium), 5);
+  assert.equal((await request('/admin/stats', { userId: staff })).data.revenueCents, 0);
+});
+
+test('an inventory stream reports committed stock changes and can be closed', async () => {
+  const controller = new AbortController();
+  const response = await fetch(`${baseURL}/inventory/events`, { signal: controller.signal });
+  assert.match(response.headers.get('content-type'), /text\/event-stream/);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const initial = decoder.decode((await reader.read()).value);
+  assert.match(initial, /event: inventory/);
+  const initialVersion = JSON.parse(initial.match(/data: (.+)/)[1]).version;
+  await counterSale();
+  const changed = decoder.decode((await reader.read()).value);
+  assert.ok(JSON.parse(changed.match(/data: (.+)/)[1]).version > initialVersion);
+  await reader.cancel();
+  controller.abort();
 });

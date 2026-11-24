@@ -63,6 +63,8 @@ export const api = {
 
 /** Everything under /api/admin. The server re-checks the admin role on every call. */
 export const admin = {
+  counterSales: () => request('/admin/counter-sales'),
+  recordCounterSale: (body, key) => request('/admin/counter-sales', { method: 'POST', body, headers: { 'Idempotency-Key': key } }),
   order: (id) => request(`/admin/orders/${id}`),
   returns: (status) => request(`/admin/returns${status ? `?status=${status}` : ''}`),
   createReturn: (body, key) => request('/admin/returns', { method: 'POST', body, headers: { 'Idempotency-Key': key } }),

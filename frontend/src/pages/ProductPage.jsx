@@ -7,10 +7,12 @@ import ProductImage from '../components/ProductImage.jsx';
 import Stars from '../components/Stars.jsx';
 import { Status } from '../components/Status.jsx';
 import { useAsync } from '../components/useAsync.js';
+import { useInventoryVersion } from '../context/InventoryContext.jsx';
 
 export default function ProductPage() {
   const { slug } = useParams();
-  const { data: p, error, loading } = useAsync(() => api.product(slug), [slug]);
+  const inventoryVersion = useInventoryVersion();
+  const { data: p, error, loading } = useAsync(() => api.product(slug), [slug, inventoryVersion]);
   const { add, lines } = useCart();
   const { maxQty: MAX_QTY } = useCart();
   const [colorName, setColorName] = useState('');
@@ -30,9 +32,9 @@ export default function ProductPage() {
     setSize(p.sizes.length === 1 ? p.sizes[0] : '');
     setQty(1);
     setShowSizeHint(false);
-  }, [p]);
+  }, [p?.id]);
 
-  if (loading) return <Status loading />;
+  if (loading && !p) return <Status loading />;
   if (error) return <Status error={error} />;
 
   const color = p.colors.find((c) => c.name === colorName) ?? p.colors[0];
